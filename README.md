@@ -78,7 +78,7 @@ The agent activates this skill automatically when it detects tasks related to:
 ## Install
 
 ```bash
-npx skills add https://github.com/Jeremias-2000/python-backend-engineering-skill
+npx skills add https://github.com/Jeremias-2000/agent-skills
 ```
 
 Or install directly from a local path:
