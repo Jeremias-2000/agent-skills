@@ -1,4 +1,12 @@
-# python-backend-engineering
+# agent-skills
+
+A collection of reusable skills for coding agents.
+
+## Available skills
+
+- [`python-backend-engineering`](skills/python-backend-engineering/): Python backend architecture, domain-driven design, AWS Lambda, logging, testing, and quality.
+
+## About `python-backend-engineering`
 
 A reusable Skill that guides an executing agent on clean architecture, domain-driven design principles, refactoring, and AWS Lambda best practices for Python backends.
 
@@ -32,25 +40,26 @@ npx skills add https://github.com/Jeremias-2000/python-backend-engineering-skill
 Or install directly from a local path:
 
 ```bash
-npx skills add ./python-backend-engineering
+npx skills add ./skills/python-backend-engineering
 ```
 
 ## Skill structure
 
 ```
-python-backend-engineering/
-├── SKILL.md                          # skill definition and workflow
-├── evals/
-│   └── evals.json                    # evaluation scenarios for skill quality
-└── references/
-    ├── python-standard-architecture.md
-    ├── python-standard-domain.md
-    ├── python-standard-application.md
-    ├── python-standard-infrastructure.md
-    ├── python-standard-logging.md
-    ├── python-standard-quality.md
-    ├── python-standard-exceptions.md
-    └── python-standard-refactoring.md
+skills/
+└── python-backend-engineering/
+    ├── SKILL.md                          # skill definition and workflow
+    ├── evals/
+    │   └── evals.json                    # evaluation scenarios for skill quality
+    └── references/
+        ├── python-standard-architecture.md
+        ├── python-standard-domain.md
+        ├── python-standard-application.md
+        ├── python-standard-infrastructure.md
+        ├── python-standard-logging.md
+        ├── python-standard-quality.md
+        ├── python-standard-exceptions.md
+        └── python-standard-refactoring.md
 ```
 
 Reference docs are loaded on demand — the agent only pulls in the relevant section based on the task at hand, keeping context lean. Active Skill files are normative; archived OpenSpec artifacts are historical only.
