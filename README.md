@@ -4,9 +4,9 @@ A collection of reusable skills for coding agents.
 
 ## Available skills
 
-- [`python-backend-engineering`](skills/python-backend-engineering/): Python backend architecture, domain-driven design, AWS Lambda, logging, testing, and quality.
+- [`python-backend`](skills/python-backend/): Python backend architecture, domain-driven design, AWS Lambda, logging, testing, and quality.
 
-## About `python-backend-engineering`
+## About `python-backend`
 
 A reusable Skill that guides an executing agent on clean architecture, domain-driven design principles, refactoring, and AWS Lambda best practices for Python backends.
 
@@ -40,14 +40,14 @@ npx skills add https://github.com/Jeremias-2000/python-backend-engineering-skill
 Or install directly from a local path:
 
 ```bash
-npx skills add ./skills/python-backend-engineering
+npx skills add ./skills/python-backend
 ```
 
 ## Skill structure
 
 ```
 skills/
-└── python-backend-engineering/
+└── python-backend/
     ├── SKILL.md                          # skill definition and workflow
     ├── evals/
     │   └── evals.json                    # evaluation scenarios for skill quality

@@ -7,7 +7,7 @@ Provide reusable guidance for safely refactoring Python backend applications whi
 ## Requirements
 
 ### Requirement: Skill identity and refactoring reference
-The package SHALL identify `python-backend-engineering` as a reusable Skill that guides an executing agent, and SHALL provide a valid dedicated reference for Python backend refactoring.
+The package SHALL identify `python-backend` as a reusable Skill that guides an executing agent, and SHALL provide a valid dedicated reference for Python backend refactoring.
 
 #### Scenario: Agent loads refactoring guidance
 - **WHEN** an agent activates the Python backend Skill for an existing-backend refactoring

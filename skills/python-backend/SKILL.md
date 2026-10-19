@@ -1,5 +1,5 @@
 ---
-name: python-backend-engineering
+name: python-backend
 description: "Python backend engineering standards for architecture, domain modeling, application layers, AWS Lambda, logging, testing, and quality. Activate when designing, scaffolding, implementing, reviewing, or refactoring any Python backend, API, worker, or Lambda - including architecture decisions, DDD patterns, ports and adapters, configuration, observability, and idempotency."
 compatibility: "Python 3.8+, existing project tooling, and the project's configured test and lint commands."
 metadata:
@@ -8,7 +8,7 @@ metadata:
 license: MIT
 ---
 
-# Python Backend Engineering Skill
+# Python Backend Skill
 
 This package is a reusable Skill that guides an executing agent. It is not an autonomous Agent implementation.
 
