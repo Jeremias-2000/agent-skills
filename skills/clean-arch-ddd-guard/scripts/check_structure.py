@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Verifica se um projeto segue a estrutura Clean Architecture + DDD esperada.
+"""Check whether a project follows the expected Clean Architecture + DDD structure.
 
-Uso:
-    python check_structure.py <raiz-do-projeto> [--package-name src|bff] [--spec spec.json] [--json] [--strict]
+Usage:
+    python check_structure.py <project-root> [--package-name src|bff] [--spec spec.json] [--json] [--strict]
 
-Checagens:
-  1. Pastas e arquivos obrigatorios existem (erro se faltar).
-  2. Pastas/arquivos fora do esquema (aviso).
-  3. Arquivos .py soltos no meio das camadas (aviso).
-  4. Regra de dependencia entre camadas via AST (erro).
-  5. Frameworks proibidos em domain/application (erro).
-  6. Testes unitarios na pasta da camada correta (aviso).
+Checks:
+  1. Required directories and files exist (error if missing).
+  2. Directories/files outside the schema (warning).
+  3. Stray .py files within layers (warning).
+  4. Dependency rule between layers via AST (error).
+  5. Forbidden frameworks in domain/application (error).
+  6. Unit tests are in the correct layer directory (warning).
 
-Codigo de saida: 0 sem erros, 1 com erros (ou avisos, com --strict), 2 uso invalido.
+Exit codes: 0 no errors, 1 with errors (or warnings, with --strict), 2 invalid usage.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class Report:
 
 
 def find_root(start: Path, root_name: str, package: str) -> Path | None:
-    """Aceita a propria pasta app/, a pasta que a contem, ou uma pasta acima."""
+    """Accept the app/ directory itself, its parent, or an ancestor directory."""
     candidates = [start, start / root_name]
     candidates += [p for p in start.glob(f"*/{root_name}")]
     for c in candidates:
@@ -56,7 +56,7 @@ def find_root(start: Path, root_name: str, package: str) -> Path | None:
 
 
 def substitute_package_name(value, package_name: str):
-    """Substitui o marcador do pacote nas partes estruturais do spec."""
+    """Replace the package marker in the structural parts of the spec."""
     if isinstance(value, str):
         return value.replace(PACKAGE_TOKEN, package_name)
     if isinstance(value, list):
@@ -77,7 +77,7 @@ def iter_py(base: Path, ignore: set[str]):
 
 
 def layer_of(parts: tuple[str, ...], package: str, layers: list[str]) -> str | None:
-    """Camada de um caminho/modulo: procura <package> seguido de uma camada."""
+    """Find a layer in a path/module by locating <package> followed by a layer."""
     for i, part in enumerate(parts[:-1]):
         if part == package and parts[i + 1] in layers:
             return parts[i + 1]
@@ -85,7 +85,7 @@ def layer_of(parts: tuple[str, ...], package: str, layers: list[str]) -> str | N
 
 
 def resolve_import(node: ast.AST, file_parts: tuple[str, ...], root: Path, file_path: Path) -> list[tuple[str, ...]]:
-    """Devolve os modulos importados como tuplas de segmentos (relativos resolvidos)."""
+    """Return imported modules as tuples of segments (with relative imports resolved)."""
     out: list[tuple[str, ...]] = []
     if isinstance(node, ast.Import):
         for alias in node.names:
@@ -112,14 +112,14 @@ def check_structure(root: Path, spec: dict, rep: Report) -> None:
         if (root / d).is_dir():
             rep.passed()
         else:
-            rep.error("MISSING_DIR", f"{root.name}/{d}", "Pasta obrigatoria ausente.",
-                      f"Crie `{root.name}/{d}/` (com `__init__.py` se for pacote Python).")
+            rep.error("MISSING_DIR", f"{root.name}/{d}", "Required directory is missing.",
+                      f"Create `{root.name}/{d}/` (with `__init__.py` if it is a Python package).")
     for f in spec["required_files"]:
         if (root / f).is_file():
             rep.passed()
         else:
-            rep.error("MISSING_FILE", f"{root.name}/{f}", "Arquivo obrigatorio ausente.",
-                      f"Crie `{root.name}/{f}`.")
+            rep.error("MISSING_FILE", f"{root.name}/{f}", "Required file is missing.",
+                      f"Create `{root.name}/{f}`.")
 
     for parent, allowed in spec["allowed_children"].items():
         base = root / parent
@@ -130,13 +130,13 @@ def check_structure(root: Path, spec: dict, rep: Report) -> None:
                 continue
             if child.is_dir() and child.name not in allowed:
                 rep.warn("UNEXPECTED_DIR", f"{root.name}/{parent}/{child.name}",
-                         "Pasta fora do esquema esperado.",
-                         f"Se for codigo de negocio, mova para `domain/`; se for tecnico, para `infra/`. "
-                         f"Se for intencional, adicione ao spec.")
+                         "Directory is outside the expected schema.",
+                         f"If it contains business code, move it to `domain/`; if it is technical, move it to `infra/`. "
+                         f"If it is intentional, add it to the spec.")
             elif child.is_file() and child.suffix == ".py":
                 rep.warn("STRAY_FILE", f"{root.name}/{parent}/{child.name}",
-                         "Arquivo .py solto; as camadas devem organizar codigo em subpastas.",
-                         f"Mova para uma das subpastas: {', '.join(allowed)}.")
+                         "Stray .py file; layers should organize code in subdirectories.",
+                         f"Move it to one of these subdirectories: {', '.join(allowed)}.")
 
 
 def check_dependencies(root: Path, spec: dict, rep: Report) -> None:
@@ -157,7 +157,7 @@ def check_dependencies(root: Path, spec: dict, rep: Report) -> None:
         try:
             tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
         except (SyntaxError, UnicodeDecodeError) as exc:
-            rep.warn("PARSE", str(py.relative_to(root.parent)), f"Nao foi possivel analisar: {exc}")
+            rep.warn("PARSE", str(py.relative_to(root.parent)), f"Could not parse: {exc}")
             continue
         checked += 1
         seen: set[tuple] = set()
@@ -174,17 +174,17 @@ def check_dependencies(root: Path, spec: dict, rep: Report) -> None:
                     continue
                 seen.add(key)
                 if tgt_layer and tgt_layer != src_layer and tgt_layer not in rules[src_layer]:
-                    allowed = ", ".join(rules[src_layer]) or "nenhuma outra camada"
+                    allowed = ", ".join(rules[src_layer]) or "no other layers"
                     rep.error("LAYER_VIOLATION", shown,
                               f"`{src_layer}` importa `{tgt_layer}` ({'.'.join(mod)}).",
-                              f"`{src_layer}` so pode depender de: {allowed}. "
-                              f"Declare a interface em `domain/interfaces/` e injete a implementacao via `infra/di/`.",
+                              f"`{src_layer}` may depend only on: {allowed}. "
+                              f"Declare the interface in `domain/interfaces/` and inject the implementation through `infra/di/`.",
                               node.lineno)
                 top = mod[0]
                 if src_layer in forb and top in forb[src_layer]:
                     rep.error("FRAMEWORK_IN_" + src_layer.upper(), shown,
                               f"`{src_layer}` importa a biblioteca tecnica `{top}`.",
-                              "Detalhes tecnicos pertencem a `infra/adapters/` atras de uma interface do dominio.",
+                              "Technical details belong in `infra/adapters/` behind a domain interface.",
                               node.lineno)
     if checked:
         rep.passed()
@@ -214,16 +214,16 @@ def check_tests_mirror(root: Path, spec: dict, rep: Report) -> None:
                         imported.add(lay)
         if imported and in_layer in layers and in_layer not in imported:
             rep.warn("TEST_PLACEMENT", str(py.relative_to(root.parent)),
-                     f"Teste esta em `unitary/{in_layer}/` mas importa so {', '.join(sorted(imported))}.",
-                     f"Mova para `tests/unitary/{sorted(imported)[0]}/` se testa essa camada.")
+                     f"Test is in `unitary/{in_layer}/` but imports only {', '.join(sorted(imported))}.",
+                     f"Move it to `tests/unitary/{sorted(imported)[0]}/` if it tests that layer.")
         else:
             rep.passed()
 
 
 def render_text(rep: Report, root: Path) -> str:
-    lines = [f"Projeto analisado: {root}",
-             f"✅ {rep.ok} verificacoes ok · ❌ {len(rep.errors)} erros · ⚠️  {len(rep.warnings)} avisos", ""]
-    for title, items in (("ERROS", rep.errors), ("AVISOS", rep.warnings)):
+    lines = [f"Analyzed project: {root}",
+             f"✅ {rep.ok} checks passed · ❌ {len(rep.errors)} errors · ⚠️  {len(rep.warnings)} warnings", ""]
+    for title, items in (("ERRORS", rep.errors), ("WARNINGS", rep.warnings)):
         if not items:
             continue
         lines.append(title)
@@ -234,24 +234,24 @@ def render_text(rep: Report, root: Path) -> str:
                 lines.append(f"    → {it['hint']}")
         lines.append("")
     if not rep.errors and not rep.warnings:
-        lines.append("Estrutura e dependencias conformes com o esquema.")
+        lines.append("Structure and dependencies conform to the schema.")
     return "\n".join(lines)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("project", nargs="?", default=".", help="pasta app/ ou a que a contem")
-    ap.add_argument("--spec", default=str(DEFAULT_SPEC), help="esquema em JSON")
+    ap.add_argument("project", nargs="?", default=".", help="app/ directory or its parent")
+    ap.add_argument("--spec", default=str(DEFAULT_SPEC), help="schema in JSON format")
     ap.add_argument("--package-name", choices=("src", "bff"), default="src",
-                    help="nome do pacote interno: src (serviço comum, padrão) ou bff (Backend for Frontend)")
-    ap.add_argument("--json", action="store_true", help="saida em JSON")
-    ap.add_argument("--strict", action="store_true", help="avisos tambem falham")
+                    help="internal package name: src (regular service, default) or bff (Backend for Frontend)")
+    ap.add_argument("--json", action="store_true", help="output in JSON format")
+    ap.add_argument("--strict", action="store_true", help="warnings also cause failure")
     args = ap.parse_args()
 
     try:
         spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"Spec invalido: {exc}", file=sys.stderr)
+        print(f"Invalid spec: {exc}", file=sys.stderr)
         return 2
 
     spec = substitute_package_name(spec, args.package_name)
@@ -260,8 +260,8 @@ def main() -> int:
     start = Path(args.project).resolve()
     root = find_root(start, spec["root_name"], spec["package_name"])
     if root is None:
-        print(f"Nao encontrei `{spec['root_name']}/{spec['package_name']}` em {start}. "
-              f"Use --spec para adaptar o esquema aos nomes do projeto.", file=sys.stderr)
+        print(f"Could not find `{spec['root_name']}/{spec['package_name']}` in {start}. "
+              f"Use --spec to adapt the schema to the project's names.", file=sys.stderr)
         return 2
 
     rep = Report()

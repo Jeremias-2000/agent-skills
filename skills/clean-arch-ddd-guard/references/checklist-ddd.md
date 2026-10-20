@@ -1,50 +1,50 @@
-# Checklist de revisão DDD / Clean Architecture
+# DDD / Clean Architecture Review Checklist
 
-O script `check_structure.py` cobre estrutura de pastas e imports. Esta checklist cobre o que só leitura de código revela. Use nos arquivos que o script apontou e nos que foram alterados recentemente.
+The `check_structure.py` script checks folder structure and imports. This checklist covers issues that can only be discovered by reading the code. Use it on files flagged by the script and on recently changed files.
 
-## Domínio
+## Domain
 
-- [ ] **Entidades têm comportamento.** Uma classe só com atributos e getters/setters, com a regra espalhada em use cases, é uma entidade anêmica. Mova a regra para a entidade.
-- [ ] **Entidades protegem invariantes.** Estado inválido deve ser impossível de construir ou de alcançar (validação no construtor ou em métodos de negócio).
-- [ ] **Identidade explícita.** Entidades comparam por identidade (id), não por todos os atributos.
-- [ ] **DTOs não carregam regra.** Se um DTO tem `if` de negócio, o código pertence a uma entidade.
-- [ ] **Sem tipos de transporte no domínio.** Nada de request/response de framework, modelos ORM ou serializers dentro de `entities/`.
-- [ ] **Linguagem ubíqua.** Nomes de classes e métodos usam o vocabulário do negócio (ex.: `ConcessionRequest`, `approve`), não termos técnicos (`Manager`, `Helper`, `Data`).
+- [ ] **Entities have behavior.** A class containing only attributes and getters/setters, with rules scattered across use cases, is an anemic entity. Move the rules into the entity.
+- [ ] **Entities protect invariants.** Invalid state should be impossible to create or reach (validate in the constructor or business methods).
+- [ ] **Identity is explicit.** Entities are compared by identity (ID), not by all their attributes.
+- [ ] **DTOs do not contain business rules.** If a DTO contains a business-related `if`, that code belongs in an entity.
+- [ ] **No transport types in the domain.** Do not put framework request/response objects, ORM models, or serializers in `entities/`.
+- [ ] **Use ubiquitous language.** Class and method names use business vocabulary (e.g., `ConcessionRequest`, `approve`), not technical terms (`Manager`, `Helper`, `Data`).
 
-## Interfaces (contratos)
+## Interfaces (contracts)
 
-- [ ] Toda interface em `domain/interfaces/<x>/` tem ao menos uma implementação no lugar correspondente (`usecases` → `application/usecases`, `gateways` → `application/gateways`, `adapters` → `infra/adapters`).
-- [ ] Toda implementação em `application/usecases`, `application/gateways` e `infra/adapters` declara qual interface implementa.
-- [ ] Interfaces só têm assinatura, sem lógica.
+- [ ] Every interface in `domain/interfaces/<x>/` has at least one implementation in the corresponding location (`usecases` → `application/usecases`, `gateways` → `application/gateways`, `adapters` → `infra/adapters`).
+- [ ] Every implementation in `application/usecases`, `application/gateways`, and `infra/adapters` declares which interface it implements.
+- [ ] Interfaces contain signatures only, no logic.
 
-## Application
+## Application layer
 
-- [ ] Um use case representa uma intenção do usuário/sistema, com um método público claro (por exemplo `execute`).
-- [ ] Use case recebe dependências por construtor, tipadas pelas **interfaces** do domínio, nunca pelas classes concretas.
-- [ ] Use case não conhece HTTP (status code, headers, request) nem detalhes de banco.
-- [ ] Gateways traduzem formatos externos para DTOs/entidades do domínio, para que o formato do sistema externo não vaze para dentro.
+- [ ] A use case represents a user/system intent, with a clear public method (e.g., `execute`).
+- [ ] A use case receives dependencies through its constructor, typed to domain **interfaces**, never concrete classes.
+- [ ] A use case knows nothing about HTTP (status codes, headers, requests) or database details.
+- [ ] Gateways translate external formats into domain DTOs/entities so external system formats do not leak inward.
 
-## Infra
+## Infrastructure layer
 
-- [ ] Controllers são finos: validam entrada, chamam um use case, convertem resultado em resposta. Regra de negócio num controller deve ir para entidade ou use case.
-- [ ] Nenhum controller instancia adapters ou use cases diretamente; recebe tudo via `di/`.
-- [ ] `di/` é o único ponto que importa implementações concretas para montá-las.
-- [ ] Exceções de infra são convertidas em erros de domínio/aplicação antes de subir, ou mapeadas para resposta HTTP em um único lugar (`exceptions/`).
-- [ ] Configuração lida de ambiente em `setup/` ou `application/configuration/`, nunca com `os.environ` espalhado pelo domínio.
+- [ ] Controllers are thin: they validate input, call a use case, and convert the result into a response. Business rules in a controller belong in an entity or use case.
+- [ ] No controller instantiates adapters or use cases directly; it receives everything through `di/`.
+- [ ] `di/` is the only place that imports concrete implementations to wire them together.
+- [ ] Infrastructure exceptions are converted into domain/application errors before propagating, or mapped to HTTP responses in one place (`exceptions/`).
+- [ ] Read environment configuration in `setup/` or `application/configuration/`, never through scattered `os.environ` access in the domain.
 
-## Testes
+## Tests
 
-- [ ] Teste unitário de domínio não usa mock de infra (se precisou, o domínio está acoplado).
-- [ ] Teste unitário de use case usa fakes/mocks das **interfaces** do domínio.
-- [ ] Cada camada nova tem testes em `tests/unitary/<camada>/`.
-- [ ] Testes de integração ficam em `tests/integration/` e sobem a aplicação montada.
+- [ ] A domain unit test does not mock infrastructure (if it does, the domain is coupled).
+- [ ] A use-case unit test uses fakes/mocks of domain **interfaces**.
+- [ ] Every new layer has tests in `tests/unitary/<layer>/`.
+- [ ] Integration tests live in `tests/integration/` and start the assembled application.
 
-## Sinais de alerta rápidos
+## Quick warning signs
 
-| Sintoma | Provável causa |
+| Symptom | Likely cause |
 |---|---|
-| `import requests`/`sqlalchemy`/`fastapi` em `domain/` | Detalhe técnico vazou para o núcleo |
-| Use case com muitos `if status_code ==` | Camada HTTP vazou para application |
-| Controller com mais de ~30 linhas de lógica | Regra de negócio no lugar errado |
-| Pasta `utils/`, `helpers/`, `common/` na raiz de uma camada | Falta de um conceito de domínio ou de camada definida |
-| Teste de domínio que precisa de banco ou rede | Domínio acoplado à infra |
+| `import requests`/`sqlalchemy`/`fastapi` in `domain/` | A technical detail has leaked into the core |
+| Use case with many `if status_code ==` checks | The HTTP layer has leaked into the application |
+| Controller with more than ~30 lines of logic | Business rules are in the wrong place |
+| `utils/`, `helpers/`, or `common/` directory at a layer's root | A domain concept or layer boundary is missing |
+| Domain test that requires a database or network | The domain is coupled to infrastructure |

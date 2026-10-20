@@ -138,7 +138,7 @@ skills/
 │   ├── SKILL.md                          # layout-specific architecture checks
 │   ├── scripts/check_structure.py
 │   └── references/
-│       ├── estrutura-esperada.md
+│       ├── expected-structure.md
 │       ├── checklist-ddd.md
 │       └── spec.json
 └── mcp-guardrails-architect/
