@@ -1,19 +1,19 @@
 ---
 name: clean-arch-ddd-guard
-description: Verifica projetos Python contra a convenção de pastas Clean Architecture + DDD desta skill e detecta dependências entre camadas. Use quando o projeto adota esse template, ao auditar sua estrutura ou localizar arquivos. `src/` é o padrão para serviços comuns; `bff/` é reservado a Backend for Frontend.
+description: Checks Python projects against this skill's Clean Architecture + DDD folder convention and detects dependencies between layers. Use when a project adopts this template, to audit its structure, or to locate files. `src/` is the default for regular services; `bff/` is reserved for Backend for Frontend.
 ---
 
-# Guardião de Clean Architecture + DDD
+# Clean Architecture + DDD Guard
 
-Esta skill valida uma convenção de projeto baseada em Clean Architecture e Domain Driven Design. Use-a quando a equipe tiver adotado esta estrutura e quiser auditar diretórios, imports e posicionamento de testes. Ela não determina que todo backend Python deva usar essas camadas: para orientação geral e escolha proporcional da arquitetura, use `python-backend`.
+This skill validates a project convention based on Clean Architecture and Domain-Driven Design. Use it when a team has adopted this structure and wants to audit directories, imports, and test placement. It does not prescribe these layers for every Python backend; for general guidance and proportionate architecture choices, use `python-backend`.
 
-## Estrutura esperada
+## Expected structure
 
-A estrutura de referência está em `references/estrutura-esperada.md`, com a responsabilidade de cada pasta. O diretório `app/` é a raiz do código; use um único pacote interno conforme o tipo de aplicação:
+The reference structure and each directory's responsibility are documented in `references/expected-structure.md`. The `app/` directory is the code root; use exactly one internal package, depending on the application type:
 
 ```
 app/
-├── src/                    # serviço Python comum (padrão)
+├── src/                    # regular Python service (default)
 │   ├── application/        configuration/ · gateways/ · usecases/
 │   ├── domain/             config/ · dtos/ · entities/ · interfaces/{adapters,gateways,usecases}/
 │   └── infra/              adapters/ · controllers/
@@ -29,92 +29,92 @@ app/
 └── run.py
 ```
 
-Para projetos BFF, use `bff/` no lugar de `src/`, mantendo as mesmas camadas e subpastas. Na imagem original a árvore aparece truncada (há reticências), então pastas extras não são erro por si só. Trate pasta ou arquivo fora do esquema como *aviso* para confirmar com o usuário. Só pasta ou arquivo obrigatório ausente é *erro*.
+For BFF projects, use `bff/` instead of `src/`, keeping the same layers and subdirectories. The original reference tree is truncated (it contains ellipses), so extra directories are not automatically errors. Treat directories or files outside the schema as *warnings* to confirm with the user. Only missing required directories or files are *errors*.
 
-Os subdiretórios de `controllers/` representam módulos de negócio e variam por projeto; não são diretórios obrigatórios globais.
+Subdirectories of `controllers/` represent business modules and vary by project; they are not globally required directories.
 
-## Fluxo de trabalho
+## Workflow
 
-### 1. Rode o verificador
+### 1. Run the checker
 
-O script faz a parte mecânica (existência de pastas, imports entre camadas, frameworks no domínio), que é determinística e não deve depender da sua leitura.
+The script handles mechanical checks (directory existence, imports between layers, and frameworks in the domain). These checks are deterministic and should not depend on your interpretation.
 
 ```bash
-python <skill-dir>/scripts/check_structure.py <raiz-do-projeto>
+python <skill-dir>/scripts/check_structure.py <project-root>
 ```
 
-- `<raiz-do-projeto>` é a pasta `app/` ou a pasta que a contém. O script localiza sozinho.
-- `src/` é o padrão para serviços comuns. Para um BFF, acrescente `--package-name bff`.
-- Exemplo para um BFF: `python <skill-dir>/scripts/check_structure.py <raiz-do-projeto> --package-name bff`.
-- Use `--json` para saída estruturada e `--strict` para tratar avisos como erros (útil em CI).
-- O script devolve código de saída 1 quando há erros.
+- `<project-root>` is the `app/` directory or its parent. The script locates it automatically.
+- `src/` is the default for regular services. For a BFF, add `--package-name bff`.
+- BFF example: `python <skill-dir>/scripts/check_structure.py <project-root> --package-name bff`.
+- Use `--json` for structured output and `--strict` to treat warnings as errors (useful in CI).
+- The script exits with code 1 when errors are found.
 
-### 2. Interprete o resultado com o critério de DDD
+### 2. Interpret the results using DDD principles
 
-O script não enxerga o que está dentro das classes. Depois dele, leia os arquivos suspeitos e aplique `references/checklist-ddd.md`: entidades anêmicas, regra de negócio vazando para controllers, DTOs no lugar de entidades, contratos sem implementação, entre outros. Vale a pena ler essa checklist sempre que revisar mais do que a estrutura de pastas.
+The script cannot inspect what happens inside classes. After running it, read the files it flags and apply `references/checklist-ddd.md` to look for anemic entities, business rules leaking into controllers, DTOs used in place of entities, contracts without implementations, and similar issues. Consult this checklist whenever reviewing more than folder structure.
 
-### 3. Reporte de forma acionável
+### 3. Report actionable findings
 
-Agrupe por gravidade e sempre diga *onde o arquivo deveria estar* e *por quê*. Formato sugerido:
+Group findings by severity and always say *where the file should be* and *why*. Suggested format:
 
 ```
-## Resultado
-✅ N verificações ok · ❌ N erros · ⚠️ N avisos
+## Results
+✅ N checks passed · ❌ N errors · ⚠️ N warnings
 
-## Erros
-- `app/src/domain/entities/pedido.py:3` importa `src.infra...`
-  → o domínio não pode depender de infra. Crie a interface em `domain/interfaces/adapters/` e injete a implementação via `infra/di/`.
+## Errors
+- `app/src/domain/entities/order.py:3` imports `src.infra...`
+  → the domain cannot depend on infrastructure. Create the interface in `domain/interfaces/adapters/` and inject the implementation through `infra/di/`.
 
-## Avisos
-- `app/src/utils/` não faz parte do esquema. Se for helper de domínio, mova para `domain/`; se for técnico, para `infra/`.
+## Warnings
+- `app/src/utils/` is not part of the schema. If it is a domain helper, move it to `domain/`; if it is technical, move it to `infra/`.
 
-## Sugestão de correção
-(comandos `mkdir`/`git mv` ou o diff, se o usuário pedir para aplicar)
+## Suggested fix
+(Use `mkdir`/`git mv` commands or provide a diff if the user asks you to apply it.)
 ```
 
-Não mova nem apague arquivos sem o usuário pedir. Proponha o plano e espere confirmação, porque mover arquivos quebra imports e histórico.
+Do not move or delete files unless the user asks. Propose a plan and wait for confirmation, because moving files can break imports and history.
 
-### 4. Ao criar código novo em um projeto que adotou este template, escolha a camada antes de escrever
+### 4. Choose the layer before writing new code in a project that adopted this template
 
-Use esta tabela de decisão:
+Use this decision table:
 
-| Estou criando… | Vai em | Observação |
+| I am creating… | Put it in | Notes |
 |---|---|---|
-| Regra de negócio, objeto com identidade/comportamento | `domain/entities/` | Python puro, sem frameworks |
-| Estrutura de dados que trafega entre camadas | `domain/dtos/` | Sem lógica de negócio |
-| Contrato (ABC/Protocol) de um use case, gateway ou adapter | `domain/interfaces/{usecases,gateways,adapters}/` | Só a assinatura |
-| Interface de configuração | `domain/config/` | Só o contrato |
-| Orquestração de um caso de uso | `application/usecases/` | Implementa uma interface de `domain/interfaces/usecases/` |
-| Acesso a sistema externo feito pela aplicação | `application/gateways/` | Implementa uma interface de `domain/interfaces/gateways/` |
-| Leitura/carga de configuração da aplicação | `application/configuration/` | |
-| Cliente HTTP, banco, fila, SDK externo | `infra/adapters/` | Implementa uma interface de `domain/interfaces/adapters/` |
-| Endpoint REST | `infra/controllers/<modulo>/` | Fino: valida entrada, chama use case, formata saída |
-| Montagem das dependências | `infra/di/` | Único lugar que conhece todas as implementações |
-| Ponto de entrada (app factory, handlers) | `infra/entrypoints/` | |
-| Exceção customizada | `infra/exceptions/` | |
-| Bootstrap, logging, inicialização | `infra/setup/` | |
-| Teste | `tests/unitary/<camada>/` ou `tests/integration/` | Espelha a camada testada |
+| Business rule, object with identity or behavior | `domain/entities/` | Pure Python; no frameworks |
+| Data structure passed between layers | `domain/dtos/` | No business logic |
+| Contract (ABC/Protocol) for a use case, gateway, or adapter | `domain/interfaces/{usecases,gateways,adapters}/` | Signature only |
+| Configuration interface | `domain/config/` | Contract only |
+| Use-case orchestration | `application/usecases/` | Implements an interface from `domain/interfaces/usecases/` |
+| Application access to an external system | `application/gateways/` | Implements an interface from `domain/interfaces/gateways/` |
+| Reading/loading application configuration | `application/configuration/` | |
+| HTTP client, database, queue, external SDK | `infra/adapters/` | Implements an interface from `domain/interfaces/adapters/` |
+| REST endpoint | `infra/controllers/<module>/` | Keep it thin: validate input, call a use case, format the response |
+| Dependency wiring | `infra/di/` | The only place that knows all implementations |
+| Entry point (app factory, handlers) | `infra/entrypoints/` | |
+| Custom exception | `infra/exceptions/` | |
+| Bootstrap, logging, initialization | `infra/setup/` | |
+| Test | `tests/unitary/<layer>/` or `tests/integration/` | Mirrors the layer being tested |
 
-Se o pedido do usuário não deixar claro onde algo vai, escolha pela tabela, diga a escolha em uma linha e siga em frente.
+If the user's request does not make the right location clear, choose based on the table, state your choice in one line, and proceed.
 
-## Regra de dependência
+## Dependency rule
 
-As setas apontam para dentro: `infra → application → domain`. Quem está dentro nunca conhece quem está fora.
+Dependencies point inward: `infra → application → domain`. Inner layers never know about outer layers.
 
-- `domain` não importa `application` nem `infra`, e não importa frameworks (FastAPI, Flask, SQLAlchemy, requests, boto3, pydantic de transporte etc.). Isso mantém o núcleo testável sem subir nada e trocável sem reescrever regra de negócio.
-- `application` importa `domain`. Não importa `infra`. Fala com o mundo externo só pelas interfaces do domínio.
-- `infra` pode importar `domain` e `application`. É onde as implementações concretas são ligadas (via `di/`).
-- `tests/` pode importar qualquer camada, mas cada teste unitário deve ficar na pasta da camada que testa.
+- `domain` does not import `application`, `infra`, or frameworks (FastAPI, Flask, SQLAlchemy, requests, boto3, transport-layer Pydantic, etc.). This keeps the core testable without starting external services and lets you replace infrastructure without rewriting business rules.
+- `application` imports `domain`, not `infra`. It communicates with the outside world only through domain interfaces.
+- `infra` can import `domain` and `application`. This is where concrete implementations are wired together (through `di/`).
+- `tests/` can import any layer, but each unit test should live in the directory for the layer it tests.
 
-O script valida essas regras por análise estática dos `import` (resolvendo também imports relativos).
+The script checks these rules by statically analyzing imports (including resolving relative imports).
 
-## Quando o projeto não bate com o esquema
+## When a project does not match the schema
 
-Para serviços comuns, use o pacote `src/` (padrão); para BFFs, use `bff/` e rode o verificador com `--package-name bff`. Se a raiz ou outras convenções forem diferentes, não invente erros em massa. Explique a incompatibilidade e adapte uma cópia de `references/spec.json` com `--spec meu_spec.json`.
+For regular services, use the `src/` package (the default); for BFFs, use `bff/` and run the checker with `--package-name bff`. If the root or other conventions differ, do not invent a large number of errors. Explain the mismatch and adapt a copy of `references/spec.json` using `--spec my_spec.json`.
 
-## Arquivos da skill
+## Skill files
 
-- `scripts/check_structure.py`: verificador (estrutura, dependências, frameworks no domínio, espelhamento de testes).
-- `references/estrutura-esperada.md`: árvore completa com a responsabilidade de cada pasta.
-- `references/checklist-ddd.md`: checklist de revisão para o que a análise estática não alcança.
-- `references/spec.json`: o esquema em formato de dados, usado pelo script (editável).
+- `scripts/check_structure.py`: checker (structure, dependencies, frameworks in the domain, and test mirroring).
+- `references/expected-structure.md`: complete tree with each directory's responsibility.
+- `references/checklist-ddd.md`: review checklist for concerns static analysis cannot detect.
+- `references/spec.json`: the data-format schema used by the script (editable).
