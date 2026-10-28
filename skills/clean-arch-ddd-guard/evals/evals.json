@@ -1,0 +1,100 @@
+{
+  "skill_name": "clean-arch-ddd-guard",
+  "evals": [
+    {
+      "id": 1,
+      "category": "run-checker-before-judging",
+      "prompt": "Audit the structure of this Python project that adopted our Clean Architecture + DDD template. Tell me whether it complies.",
+      "expected_behaviors": [
+        "Runs scripts/check_structure.py against the project root before drawing conclusions.",
+        "Uses the deterministic script output for directory existence, import, and framework checks.",
+        "Does not rely on manual inspection alone for mechanical checks the script covers.",
+        "Interprets warnings versus errors correctly: extra directories are warnings, missing required directories are errors.",
+        "Reads flagged files and applies references/checklist-ddd.md for issues static analysis cannot detect."
+      ],
+      "failure_signals": [
+        "Judges compliance purely by reading the tree without running the checker.",
+        "Treats an extra directory (outside the schema) as a hard error.",
+        "Treats a missing required directory as a mere warning.",
+        "Skips the DDD checklist when reviewing more than folder structure.",
+        "Invents a large number of errors when the project uses a different convention instead of adapting the spec."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "layer-placement-decision",
+      "prompt": "I need to add: (a) a business rule that an Order cannot be modified after shipment, (b) an HTTP endpoint to submit an order, (c) a client for an external shipping API, and (d) the dependency wiring. Where does each go in a project using this template?",
+      "expected_behaviors": [
+        "Places the shipment invariant on the Order entity in domain/entities/, pure Python with no frameworks.",
+        "Places the HTTP endpoint in infra/controllers/<module>/, kept thin (validate, call use case, format response).",
+        "Places the shipping API client in infra/adapters/, implementing an interface from domain/interfaces/adapters/.",
+        "Places the wiring in infra/di/, the only place that knows all concrete implementations.",
+        "States each choice briefly and proceeds without over-asking."
+      ],
+      "failure_signals": [
+        "Puts the business rule in a controller or use case instead of the entity.",
+        "Puts the external API client in the domain or application layer as a concrete class.",
+        "Instantiates adapters/use cases directly in a controller instead of via di/.",
+        "Scatters dependency wiring across multiple modules.",
+        "Cannot map the items to layers and guesses."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "dependency-rule-enforcement",
+      "prompt": "The checker reports: `app/src/domain/entities/order.py:3` imports `src.infra.adapters.shipping`. Explain the problem and the fix.",
+      "expected_behaviors": [
+        "States that the domain must not depend on infrastructure (dependency rule points inward).",
+        "Explains the fix: define the contract in domain/interfaces/adapters/ and inject the infra implementation through infra/di/.",
+        "Notes that this keeps the domain testable without external services and replaceable.",
+        "Identifies this as an error, not a warning.",
+        "Proposes the plan and waits for confirmation before moving files."
+      ],
+      "failure_signals": [
+        "Says it is acceptable for the domain to import infrastructure.",
+        "Suggests fixing it by moving the entity into infra/ rather than inverting the dependency.",
+        "Treats a domain-to-infra import as a minor style issue.",
+        "Moves or deletes files without being asked.",
+        "Cannot explain why the dependency rule exists."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "anemic-entity-detection",
+      "prompt": "Review this entity: `class Order` has only attributes and getters/setters; all rules (validation, total calculation, status transitions) live in `OrderService` and the controller. Is this a problem under our convention?",
+      "expected_behaviors": [
+        "Identifies an anemic entity: rules scattered across services/controllers belong in the entity.",
+        "Recommends moving invariants and behavior onto the Order entity so invalid state is impossible to reach.",
+        "Notes that DTOs must not contain business rules and entities must protect invariants.",
+        "Uses the DDD checklist reasoning, not just the structural checker, for this judgment.",
+        "Recommends ubiquitous language in method names (e.g., approve, ship) over technical terms."
+      ],
+      "failure_signals": [
+        "Says an anemic entity with rules in services is fine.",
+        "Leaves business rules in the controller.",
+        "Relies only on the structural script and misses the modeling issue.",
+        "Suggests adding more getters/setters instead of behavior methods.",
+        "Cannot distinguish a DTO from an entity."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "bff-package-variant",
+      "prompt": "Our project is a Backend for Frontend and uses the `bff/` package instead of `src/`. How do I run the structure check?",
+      "expected_behaviors": [
+        "Runs the checker with --package-name bff.",
+        "Explains that bff/ keeps the same layers and subdirectories as src/.",
+        "Notes that src/ is the default for regular services and bff/ is reserved for BFFs.",
+        "Does not report the bff/ package itself as a schema violation.",
+        "Mentions --json/--strict options when relevant for CI."
+      ],
+      "failure_signals": [
+        "Runs the checker with the default src/ package and reports everything missing.",
+        "Claims bff/ is not supported.",
+        "Treats the bff/ directory as an error rather than a supported variant.",
+        "Is unaware of the --package-name flag.",
+        "Invents errors instead of adapting the run to the BFF layout."
+      ]
+    }
+  ]
+}

@@ -1,11 +1,11 @@
 ---
 name: mcp-guardrails-architect
-description: "Design, implement, review, or audit input and output guardrails for MCP servers (especially FastMCP Resource Servers) that expose tools handling sensitive data such as payments, card numbers, personal identifiers, or tokens. Use for MCP tools, OAuth/JWT/MFA validation, input schemas, output DTOs, DLP, masking, audit logging, prompt injection, confused deputy risks, or questions about preventing sensitive data leaks in MCP/LLM systems."
+description: "Design, implement, review, or audit input and output guardrails for MCP Resource Servers that expose tools handling sensitive data such as payments, card numbers, personal identifiers, or tokens. Framework-agnostic (official MCP SDK, FastMCP, or others). Use for MCP tools, OAuth/JWT/MFA validation, input schemas, output DTOs, DLP, masking, audit logging, prompt injection, confused deputy risks, or questions about preventing sensitive data leaks in MCP/LLM systems."
 ---
 
 # MCP Guardrails Architect
 
-Guidance for designing and auditing a six-stage guardrail pipeline for a **FastMCP Resource Server**: **before the tool** (stages 1–2), **tool execution** (stage 3), and **after the tool** (stages 4–6).
+Guidance for designing and auditing a six-stage guardrail pipeline for an **MCP Resource Server**: **before the tool** (stages 1–2), **tool execution** (stage 3), and **after the tool** (stages 4–6). The guidance is framework-agnostic — it applies to servers built on the official MCP SDK, FastMCP, or any other framework that can inspect requests and responses.
 
 This skill provides requirements, patterns, pseudocode, and checklists; it does not provide a complete implementation. Produce architecture decisions and verifiable acceptance criteria, and leave implementation to the project team unless the user explicitly asks for code.
 
@@ -20,7 +20,7 @@ Ensure every MCP tool call follows this sequence: authentication and scope autho
 - Creating or changing a tool, resource, or prompt on an MCP server.
 - Configuring OAuth 2.1, OIDC, JWT, JWKS, or MFA on a Resource Server.
 - Defining tool input schemas or output DTOs.
-- Working with tools that access financial or personal data (card numbers, CPF/CNPJ, tokens, balances, or statements).
+- Working with tools that access financial or personal data (card numbers, national/tax identifiers such as CPF/CNPJ or SSN, tokens, balances, or statements).
 - Reviewing, threat-modeling, or auditing an MCP server.
 - Asking about direct or indirect prompt injection, data leakage, confused deputy risks, or LLM-mediated exfiltration.
 
@@ -182,11 +182,13 @@ function run_tool(identity, args, tool):
 
 - **Allowlist, not blocklist**: discard fields not declared in the DTO. New provider fields must not appear without an explicit decision.
 - **Never serialize** the provider object or domain entity directly.
-- **Mask by data type** (document the policy and align it with PCI DSS and applicable privacy law):
-  - **PAN**: never expose the full value; at most expose the first 6 (BIN) and last 4 digits, or only the last 4. CVV, track data, and PIN must never appear in output.
-  - **CPF/CNPJ**: partially mask (for example, expose middle digits only when justified); expose the full value only when necessary and under a specific scope.
+- **Mask by data type** (document the policy and align it with the applicable regulations — PCI DSS for card data, plus the privacy law of your jurisdiction such as GDPR, LGPD, or CCPA):
+  - **Card numbers (PAN)**: never expose the full value; at most expose the first 6 (BIN) and last 4 digits, or only the last 4. CVV, track data, and PIN must never appear in output.
+  - **National/tax identifiers** (for example CPF/CNPJ, SSN, or equivalent): partially mask (for example, expose middle digits only when justified); expose the full value only when necessary and under a specific scope.
   - **Tokens/secrets/keys**: never expose them; the provider must not return credentials to the LLM.
   - **Contact data, addresses, names**: minimize according to purpose.
+
+  The examples in this skill use Brazilian fintech data types (CPF/CNPJ, PIX, PAN under PCI DSS, LGPD). Map them to your domain: national ID or tax number (SSN, NIN, CPF), payment account identifier (IBAN, PIX key, card number), and the governing regulation (GDPR, HIPAA, PCI DSS, LGPD). The patterns — allowlist output, mask by classification, validate with checksums, fail closed — are jurisdiction-independent.
 - Treat provider **free text** (descriptions, memos) as **untrusted**: truncate, sanitize, and mark as data rather than instructions to mitigate indirect injection.
 - Limit response volume with pagination and a maximum number of items/fields per response.
 
@@ -223,7 +225,7 @@ function to_dto(raw, tool):
 - **Normalize before detection** (remove separators, apply Unicode NFKC) to resist formatting-based evasion.
 - **Action by severity**: *redact* (replace with a marker such as `[REDACTED:CPF]`) for partial PII; *block* (reject the entire response) for secrets, full PANs, and tokens.
 - **Auditing**: write a structured per-call log with `correlation_id`, `sub` (or a hash), tool, scopes, each stage's decision (allow/deny/redact/block), count and **type** of redacted items, and latency. **Never log sensitive values** or cleartext arguments; log an argument hash only when traceability is needed.
-- Use immutable (append-only) logs, defined retention (LGPD), restricted access, and alerts for spikes in blocks/redactions (possible attack or bug).
+- Use immutable (append-only) logs, defined retention (per the applicable privacy law), restricted access, and alerts for spikes in blocks/redactions (possible attack or bug).
 - **Fail closed**: a DLP error blocks the response; never pass it through.
 
 **Technologies and approaches**
@@ -244,7 +246,7 @@ function dlp_and_audit(dto, ctx):
     return dto                                           # internal error -> deny
 ```
 
-### Stage 6 — Final response validation (outside FastMCP)
+### Stage 6 — Final response validation (outside the MCP server)
 
 > This stage runs **after** the LLM composes its response to the user, so it belongs in the orchestrator/gateway/host, not in the Resource Server (the MCP server cannot see the final text). If you do not control the host, implement it in a gateway between the LLM and user, or document it as a client requirement.
 
@@ -372,7 +374,7 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
 - **Metrics**: track redaction/block rates by type, reported false positives, and false negatives found in audits. Review periodically (for example, monthly) and after any incident.
 - **New data types** (new tool, provider, or regulation): add a detector and classification **before** releasing the tool.
 - **Shadow mode**: when hardening a rule, first run it in “log only” mode to measure impact, then enable blocking.
-- **Compliance**: review policies against PCI DSS (PAN) and LGPD (CPF/PII, retention, minimization) when regulations change; retain audit evidence.
+- **Compliance**: review policies against the applicable regulations — PCI DSS for card data and the relevant privacy law (GDPR, LGPD, CCPA, or equivalent) for PII, retention, and minimization — when regulations change; retain audit evidence.
 - **Injection classifier**: periodically reevaluate against an updated attack corpus; version the model and monitor degradation.
 
 ### 4.4 Continuous operations

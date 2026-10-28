@@ -1,0 +1,100 @@
+{
+  "skill_name": "mcp-server-skeleton",
+  "evals": [
+    {
+      "id": 1,
+      "category": "transport-and-logging-boundaries",
+      "prompt": "Scaffold a new Python MCP server. What transport should it use and how should logging be wired?",
+      "expected_behaviors": [
+        "Serves over Streamable HTTP via streamable_http_app() behind Uvicorn, not stdio unless explicitly required.",
+        "Directs all logging to stderr with a single root StreamHandler and a JSON formatter; no per-module handlers.",
+        "Obtains loggers with logging.getLogger(__name__), never hardcoded names or vendored logger objects.",
+        "Loads logging config at the entrypoint import time and passes log_config= to uvicorn.run.",
+        "Caps third-party HTTP client loggers (httpx, httpcore) at WARNING in logging.conf."
+      ],
+      "failure_signals": [
+        "Defaults to stdio transport without a stated requirement.",
+        "Logs to stdout or creates per-module handlers.",
+        "Uses a hardcoded logger name or a shared logger object from a config loader.",
+        "Loads logging config only in the parent launcher, breaking under reload=True.",
+        "Leaves httpx/httpcore at INFO, producing per-request noise."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "layered-dependency-direction",
+      "prompt": "Add a new tool to this MCP server that fetches data from an external API. Describe the layers the call passes through and where each piece of code lives.",
+      "expected_behaviors": [
+        "Follows the dependency direction: MCP tool -> application use case -> domain Protocol -> infrastructure adapter -> external API.",
+        "Keeps domain code framework-free (no mcp/httpx imports in domain).",
+        "Registers the tool explicitly in infra/tools/registry.py with no automatic module discovery.",
+        "Loads configuration through Pydantic BaseSettings + python-dotenv at the composition boundary, not inside business logic.",
+        "Places the external API client in infra/adapters/ behind a domain interface."
+      ],
+      "failure_signals": [
+        "Calls the external API directly from the tool function, skipping the use case and adapter.",
+        "Imports httpx or the mcp SDK inside domain code.",
+        "Relies on automatic tool discovery instead of explicit registration.",
+        "Reads environment variables inside business logic.",
+        "Reverses the dependency direction (domain importing infra)."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "request-correlation-context",
+      "prompt": "A tool needs to include a request correlation ID in its log lines for traceability. How is this done in this skeleton?",
+      "expected_behaviors": [
+        "Declares ctx: Context (from mcp.server.mcpserver.context) on the tool.",
+        "Passes extra={\"request_id\": ctx.request_id} on log calls.",
+        "Notes the formatter includes request_id only when present.",
+        "Does NOT use ctx.log()/ctx.info() or the MCP logging capability (deprecated, SEP-2577).",
+        "Keeps logging server-side on stderr."
+      ],
+      "failure_signals": [
+        "Uses the deprecated ctx.log()/ctx.info() MCP logging capability.",
+        "Generates a random correlation ID instead of using ctx.request_id.",
+        "Omits the Context parameter and cannot correlate logs.",
+        "Logs over the protocol to the client instead of server-side stderr.",
+        "Hardcodes the request_id into the logger rather than passing it per call."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "inspector-handshake-verification",
+      "prompt": "How do I manually verify this MCP server works using MCP Inspector or curl? Walk me through it.",
+      "expected_behaviors": [
+        "Explains the Streamable HTTP session handshake: initialize returns an mcp-session-id header that must be sent on every subsequent request.",
+        "Sends notifications/initialized before any tools/call.",
+        "Sequences the flow: initialize -> notifications/initialized -> tools/call.",
+        "On PowerShell, writes JSON request bodies to temp files and uses curl.exe --data-binary \"@file\" to avoid inline-JSON mangling.",
+        "Verifies via the test suite and a live boot before declaring success."
+      ],
+      "failure_signals": [
+        "Calls tools/call without initialize and the session handshake.",
+        "Omits the mcp-session-id header on subsequent requests.",
+        "Skips notifications/initialized before tools/call.",
+        "Pipes inline JSON through PowerShell curl and hits quoting errors without the temp-file workaround.",
+        "Claims it works based only on code inspection without running it."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "windows-encoding-pitfall",
+      "prompt": "A tool returns data containing non-ASCII characters (e.g. 'Flabébé') and the server crashes on Windows with a UnicodeEncodeError when logging. What is the cause and fix?",
+      "expected_behaviors": [
+        "Identifies that Windows stderr is often cp1252 and cannot encode some non-ASCII characters.",
+        "Keeps json.dumps default ensure_ascii=True in the formatter so non-ASCII data is escaped.",
+        "Explains this prevents UnicodeEncodeError regardless of the console code page.",
+        "Verifies the fix by logging a non-ASCII value without error.",
+        "Does not 'fix' it by switching stdout encoding in a way that breaks the protocol."
+      ],
+      "failure_signals": [
+        "Blames the data source instead of the console encoding.",
+        "Sets ensure_ascii=False, making the crash worse on cp1252.",
+        "Cannot connect the UnicodeEncodeError to the Windows stderr code page.",
+        "Suggests stripping non-ASCII characters from the data.",
+        "Proposes a fix that writes logs to stdout and corrupts the protocol."
+      ]
+    }
+  ]
+}
