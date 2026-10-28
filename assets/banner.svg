@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="880" height="220" viewBox="0 0 880 220" role="img" aria-label="agent-skills — reusable skills for coding agents">
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="200" viewBox="0 0 880 200" role="img" aria-label="agent-skills — reusable skills for coding agents">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0d1117"/>
@@ -10,51 +10,35 @@
     </linearGradient>
   </defs>
 
-  <rect width="880" height="220" rx="16" fill="url(#bg)"/>
+  <rect width="880" height="200" rx="16" fill="url(#bg)"/>
 
   <!-- Agent node graph -->
   <g stroke="#58a6ff" stroke-width="2" opacity="0.85">
-    <line x1="150" y1="110" x2="230" y2="55"/>
-    <line x1="150" y1="110" x2="230" y2="110"/>
-    <line x1="150" y1="110" x2="230" y2="165"/>
-    <line x1="230" y1="55" x2="300" y2="80"/>
-    <line x1="230" y1="165" x2="300" y2="140"/>
+    <line x1="140" y1="100" x2="215" y2="50"/>
+    <line x1="140" y1="100" x2="215" y2="100"/>
+    <line x1="140" y1="100" x2="215" y2="150"/>
   </g>
   <g fill="#58a6ff">
-    <circle cx="230" cy="55" r="5"/>
-    <circle cx="230" cy="110" r="5"/>
-    <circle cx="230" cy="165" r="5"/>
-    <circle cx="300" cy="80" r="4" opacity="0.7"/>
-    <circle cx="300" cy="140" r="4" opacity="0.7"/>
+    <circle cx="215" cy="50" r="5"/>
+    <circle cx="215" cy="100" r="5"/>
+    <circle cx="215" cy="150" r="5"/>
   </g>
 
   <!-- Central hub -->
-  <g transform="translate(150,110)">
-    <circle r="46" fill="#21262d"/>
-    <circle r="46" fill="none" stroke="#58a6ff" stroke-width="2" opacity="0.6"/>
-    <circle r="30" fill="url(#node-core)"/>
-    <circle r="30" fill="none" stroke="#0d1117" stroke-width="2"/>
-    <!-- spark / skill glyph -->
-    <path d="M 0 -16 L 4 -4 L 16 0 L 4 4 L 0 16 L -4 4 L -16 0 L -4 -4 Z" fill="#0d1117"/>
+  <g transform="translate(140,100)">
+    <circle r="42" fill="#21262d"/>
+    <circle r="42" fill="none" stroke="#58a6ff" stroke-width="2" opacity="0.6"/>
+    <circle r="27" fill="url(#node-core)"/>
+    <path d="M 0 -14 L 3.5 -3.5 L 14 0 L 3.5 3.5 L 0 14 L -3.5 3.5 L -14 0 L -3.5 -3.5 Z" fill="#0d1117"/>
   </g>
 
-  <!-- Title -->
-  <text x="330" y="100" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#f0f3f6">agent-skills</text>
-  <text x="332" y="140" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#8b949e">Reusable, composable skills for coding agents</text>
+  <!-- Title + tagline -->
+  <text x="300" y="92" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#f0f3f6">agent-skills</text>
+  <text x="302" y="132" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#8b949e">Reusable, composable skills for coding agents</text>
 
-  <!-- Skill chips -->
+  <!-- Single neutral badge -->
   <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#58a6ff">
-    <g>
-      <rect x="332" y="160" width="118" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
-      <text x="391" y="178" text-anchor="middle">python-backend</text>
-    </g>
-    <g>
-      <rect x="460" y="160" width="152" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
-      <text x="536" y="178" text-anchor="middle">clean-arch-ddd-guard</text>
-    </g>
-    <g>
-      <rect x="622" y="160" width="186" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
-      <text x="715" y="178" text-anchor="middle">mcp-guardrails-architect</text>
-    </g>
+    <rect x="302" y="150" width="150" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
+    <text x="377" y="168" text-anchor="middle">SKILL.md format</text>
   </g>
 </svg>
