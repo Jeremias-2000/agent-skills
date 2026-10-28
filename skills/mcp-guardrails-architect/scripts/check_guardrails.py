@@ -18,11 +18,17 @@ Stages checked (heuristic signals):
   6. Final response         - flagged as out-of-scope for the server (host/gateway concern)
 
 Anti-patterns flagged as errors:
-  - Identity taken from tool arguments (user_id/account_id/cpf as parameters)
+  - Generic pass-through tools (call_endpoint/run_query/http_request style)
+  - Tools accepting a URL/endpoint argument (SSRF primitive)
   - Algorithm read from the token header / `alg: none` accepted
-  - Direct `return` of a provider/SDK response object from a tool
   - `verify=False` / disabled JWT verification
   - Logging sensitive-looking fields in cleartext
+
+Anti-patterns flagged as warnings:
+  - Identity taken from tool arguments (user_id/account_id/cpf as parameters)
+  - Direct `return` of a provider/SDK response object from a tool
+  - Write-named tools with no idempotency handling
+  - prepare_* tools without a matching confirm_* tool, or payment tools with no prepare/confirm pair
 
 Exit codes: 0 no errors, 1 with errors (or warnings with --strict), 2 invalid usage.
 """
@@ -74,6 +80,20 @@ SENSITIVE_LOG_RE = re.compile(
     r"(log|logger|logging)\.\w+\([^)]*\b(password|secret|token|cvv|pan|card_number|api_key)\b",
     re.IGNORECASE,
 )
+GENERIC_TOOL_NAME_RE = re.compile(
+    r"^(call_endpoint|call_api|http_request|run_query|execute_query|proxy_request|forward_request|raw_request|send_request)$",
+    re.IGNORECASE,
+)
+URL_ARG_RE = re.compile(
+    r"^(url|uri|endpoint|base_url|href|target_url|callback_url|webhook_url)$",
+    re.IGNORECASE,
+)
+WRITE_TOOL_NAME_RE = re.compile(
+    r"(pay|payment|transfer|charge|withdraw|pix|payout|purchase|create|update|delete|send)",
+    re.IGNORECASE,
+)
+PAYMENT_TOOL_NAME_RE = re.compile(r"(pay|payment|transfer|pix|payout|withdraw)", re.IGNORECASE)
+READ_PREFIX_RE = re.compile(r"^(get|list|fetch|read|query|search|check|describe|retrieve)_", re.IGNORECASE)
 
 
 class Report:
@@ -82,6 +102,7 @@ class Report:
         self.errors: list[dict] = []
         self.warnings: list[dict] = []
         self.stage_hits: dict[str, set[str]] = {k: set() for k in STAGE_SIGNALS}
+        self.tool_names: set[str] = set()
 
     def passed(self) -> None:
         self.ok += 1
@@ -100,7 +121,7 @@ def iter_py(base: Path):
         yield p
 
 
-def is_tool_function(node: ast.FunctionDef) -> bool:
+def is_tool_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     """Heuristic: a function registered as an MCP tool (decorated or named like one)."""
     for dec in node.decorator_list:
         text = ast.dump(dec)
@@ -181,7 +202,34 @@ def scan_file(path: Path, root: Path, rep: Report) -> None:
         rep.warn("PARSE_ERROR", rel, "Could not parse file; skipped AST checks.")
         return
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and is_tool_function(node) and returns_name_directly(node):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not is_tool_function(node):
+            continue
+        rep.tool_names.add(node.name)
+        if GENERIC_TOOL_NAME_RE.match(node.name):
+            rep.error(
+                "GENERIC_TOOL", rel,
+                f"Tool `{node.name}` looks like a generic pass-through.",
+                "Expose one tool per business action; a generic tool defeats per-tool scopes, schemas, limits, and DTOs.",
+                node.lineno,
+            )
+        for arg in [*node.args.args, *node.args.kwonlyargs]:
+            if URL_ARG_RE.match(arg.arg):
+                rep.error(
+                    "URL_ARG", rel,
+                    f"Tool `{node.name}` accepts URL-like argument `{arg.arg}`.",
+                    "Hardcode downstream endpoints in server configuration; a URL argument is an SSRF primitive.",
+                    node.lineno,
+                )
+        if WRITE_TOOL_NAME_RE.search(node.name) and not READ_PREFIX_RE.match(node.name):
+            seg = ast.get_source_segment(src, node) or ""
+            if "idempotency" not in seg.lower():
+                rep.warn(
+                    "MISSING_IDEMPOTENCY", rel,
+                    f"Write-named tool `{node.name}` shows no idempotency handling.",
+                    "Write tools require an idempotency_key so LLM/client retries cannot duplicate the operation.",
+                    node.lineno,
+                )
+        if returns_name_directly(node):
             rep.warn(
                 "RAW_RETURN", rel,
                 f"Tool `{node.name}` may return a raw provider response object.",
@@ -201,6 +249,28 @@ def evaluate_stages(rep: Report) -> None:
                 f"No signal detected for {stage.replace('_', ' ')}.",
                 "Confirm this stage is implemented; the checker only detects likely evidence, not correctness.",
             )
+
+
+def evaluate_tool_pairs(rep: Report) -> None:
+    """Check prepare/confirm pairing across all discovered tool names."""
+    prepares = {n for n in rep.tool_names if n.lower().startswith("prepare")}
+    confirms = {n for n in rep.tool_names if n.lower().startswith("confirm")}
+    if prepares and not confirms:
+        rep.warn(
+            "MISSING_CONFIRM_PAIR", "(project)",
+            f"Prepare tools {sorted(prepares)} have no matching confirm_* tool.",
+            "Two-phase money movement needs confirm_<action> as the only operation that executes.",
+        )
+    direct = {
+        n for n in rep.tool_names
+        if PAYMENT_TOOL_NAME_RE.search(n) and not n.lower().startswith(("prepare", "confirm"))
+    }
+    if direct and not (prepares and confirms):
+        rep.warn(
+            "SINGLE_STEP_PAYMENT", "(project)",
+            f"Payment tools {sorted(direct)} appear to execute without a prepare/confirm pair.",
+            "Split money movement into prepare_<action> (summary + single-use, payload-bound confirmation token) and confirm_<action>.",
+        )
 
 
 def main(argv=None) -> int:
@@ -224,6 +294,7 @@ def main(argv=None) -> int:
     for f in files:
         scan_file(f, root, rep)
     evaluate_stages(rep)
+    evaluate_tool_pairs(rep)
 
     # Stage 6 is always out of scope for the server itself.
     rep.warn(
