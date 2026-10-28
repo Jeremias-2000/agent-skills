@@ -1,0 +1,118 @@
+{
+  "skill_name": "mcp-guardrails-architect",
+  "evals": [
+    {
+      "id": 1,
+      "category": "identity-from-token-not-arguments",
+      "prompt": "Design an MCP tool `get_account_balance` that returns the balance for a user's account. A developer proposes adding a `user_id` argument so the LLM can pass whose balance to fetch. Review this design.",
+      "expected_behaviors": [
+        "Rejects `user_id` as a tool argument and states that identity must come from the validated token's `sub` claim.",
+        "Explains the confused deputy / IDOR risk: the LLM or client could supply another user's ID.",
+        "States that the tool derives the account from the authenticated identity and performs an ownership check.",
+        "Requires per-tool scope authorization before execution.",
+        "Notes that resource IDs (if any) require an ownership check returning 'not found' rather than confirming existence."
+      ],
+      "failure_signals": [
+        "Accepts `user_id` as a legitimate tool argument.",
+        "Trusts client-supplied identity without mentioning token-derived identity.",
+        "Does not mention IDOR/BOLA or confused deputy.",
+        "Suggests validating that `user_id` 'looks valid' instead of deriving it from the token."
+      ]
+    },
+    {
+      "id": 2,
+      "category": "jwt-validation-rigor",
+      "prompt": "Write the authentication logic for an MCP Resource Server that validates incoming Bearer JWTs. What must be checked?",
+      "expected_behaviors": [
+        "Validates the signature against the IdP's JWKS with an explicit asymmetric algorithm allowlist (RS256/ES256/EdDSA).",
+        "States the algorithm comes from server configuration, never from the token header, and rejects `alg: none` and HS* with a public key (algorithm confusion).",
+        "Validates `iss` against a fixed configured value, `aud` for this resource server (RFC 8707), `exp`, `nbf`, `iat`, and `sub`.",
+        "Authorizes per tool by required scope and denies when scopes are missing.",
+        "Returns opaque 401/403 errors that do not reveal which claim failed."
+      ],
+      "failure_signals": [
+        "Reads the algorithm from the JWT header to decide verification.",
+        "Skips `aud` validation or accepts tokens issued for another service.",
+        "Reveals which specific claim failed in the client-facing error.",
+        "Only checks expiry and signature, omitting issuer/audience/scope.",
+        "Passes the received token through to downstream APIs instead of token exchange."
+      ]
+    },
+    {
+      "id": 3,
+      "category": "output-allowlist-and-masking",
+      "prompt": "A payment provider returns a large JSON object for a transaction. The MCP tool currently serializes the provider response directly and returns it to the LLM. Identify the problems and propose the correct output handling.",
+      "expected_behaviors": [
+        "Identifies direct serialization of the provider object as a violation (new fields leak by default).",
+        "Proposes a per-tool output DTO built from an explicit allowlist of fields.",
+        "Applies masking by data classification: PAN to at most first6/last4, national ID partially masked, tokens/secrets never exposed.",
+        "Treats provider free-text fields as untrusted data (truncate, sanitize, mark as data not instructions).",
+        "Runs DLP over the serialized DTO as a last deterministic barrier and fails closed on detector error."
+      ],
+      "failure_signals": [
+        "Accepts serializing the provider response directly.",
+        "Uses a blocklist (deny known-bad fields) instead of an allowlist.",
+        "Returns full card numbers, CVV, or credentials to the LLM.",
+        "Treats provider free text as trusted instructions.",
+        "Suggests DLP that passes the response through on error (fail open)."
+      ]
+    },
+    {
+      "id": 4,
+      "category": "prompt-injection-defense-in-depth",
+      "prompt": "An MCP tool accepts a free-text `memo` field. A security reviewer is worried about prompt injection. Design the input guard.",
+      "expected_behaviors": [
+        "Applies a strict schema first: exact types, additionalProperties:false, max length, anchored patterns.",
+        "Normalizes before checking: Unicode NFKC, strip control and zero-width characters, trim, size limits.",
+        "Layers defenses: deterministic heuristics for injection patterns, optionally a classifier as an additional signal that never replaces deterministic controls.",
+        "Minimizes the attack surface by preferring enums/IDs over free text where possible.",
+        "Addresses indirect injection: third-party/provider data is untrusted data, never instructions."
+      ],
+      "failure_signals": [
+        "Relies solely on a prompt-injection classifier with no deterministic checks.",
+        "Validates without normalizing Unicode, allowing homoglyph/zero-width bypass.",
+        "Treats a classifier 'safe' verdict as proof the input is safe.",
+        "Allows unbounded free-text fields with no length or character limits.",
+        "Ignores indirect injection through tool output or provider data."
+      ]
+    },
+    {
+      "id": 5,
+      "category": "final-response-validation-scope",
+      "prompt": "A product manager asks the MCP server team to 'make sure the LLM never shows the user a full card number in its final answer.' Can the MCP Resource Server enforce this? Explain and propose an architecture.",
+      "expected_behaviors": [
+        "States that final-response validation cannot run in the MCP Resource Server because the server never sees the LLM's composed text.",
+        "Locates stage 6 in the orchestrator/gateway/host that can inspect the final answer.",
+        "Proposes running DLP again on the final text, including patterns that arise only through concatenation.",
+        "Adds grounding: transaction-specific claims must be traceable to authorized tool output.",
+        "Applies a fail-closed delivery policy with a safe generic fallback message and a correlation_id."
+      ],
+      "failure_signals": [
+        "Claims the MCP server can validate the LLM's final response by itself.",
+        "Only runs DLP on tool output, not on the composed final answer.",
+        "Delivers the original LLM text 'just in case' when a validator fails (fail open).",
+        "Has no grounding check, allowing the LLM to assert unsupported payment facts.",
+        "Omits a safe fallback message when validation fails."
+      ]
+    },
+    {
+      "id": 6,
+      "category": "write-operation-safety",
+      "prompt": "Design an MCP tool `make_payment` that charges a user. The LLM may retry tool calls. Cover authorization, freshness, and duplicate prevention.",
+      "expected_behaviors": [
+        "Requires fresh MFA for the sensitive operation, validating acr/amr per IdP semantics and a recent auth_time window, with step-up (RFC 9470) when stale.",
+        "Requires an idempotency_key so LLM/client retries do not duplicate the charge.",
+        "Enforces per-user and per-tool amount limits and explicit confirmation outside the chat.",
+        "Uses least-privilege downstream credentials (token exchange or per-user credential), never a shared master key.",
+        "Converts provider errors to sanitized application error codes with no stack trace or internal URL."
+      ],
+      "failure_signals": [
+        "Allows the payment with only a valid token and no fresh-MFA/step-up requirement.",
+        "Has no idempotency mechanism, so a retry double-charges the user.",
+        "Uses a single shared master API key for all users downstream.",
+        "Returns raw provider exceptions or stack traces to the LLM.",
+        "Confirms the payment inside the chat without an out-of-band confirmation."
+      ]
+    }
+  ]
+}

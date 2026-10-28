@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="220" viewBox="0 0 880 220" role="img" aria-label="MCP Server Skeleton — Pokémon data over the Model Context Protocol">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="ball-top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff5d5d"/>
+      <stop offset="1" stop-color="#e3350d"/>
+    </linearGradient>
+    <linearGradient id="ball-bottom" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0f3f6"/>
+      <stop offset="1" stop-color="#c9d1d9"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="880" height="220" rx="16" fill="url(#bg)"/>
+
+  <!-- Pokéball -->
+  <g transform="translate(150,110)">
+    <circle r="72" fill="#21262d"/>
+    <path d="M -68 0 A 68 68 0 0 1 68 0 Z" fill="url(#ball-top)"/>
+    <path d="M -68 0 A 68 68 0 0 0 68 0 Z" fill="url(#ball-bottom)"/>
+    <rect x="-68" y="-7" width="136" height="14" fill="#21262d"/>
+    <circle r="20" fill="#21262d"/>
+    <circle r="12" fill="#f0f3f6"/>
+    <circle r="6" fill="#58a6ff"/>
+  </g>
+
+  <!-- Connection nodes (MCP motif) -->
+  <g stroke="#58a6ff" stroke-width="2" opacity="0.85">
+    <line x1="240" y1="70" x2="300" y2="55"/>
+    <line x1="240" y1="150" x2="300" y2="165"/>
+    <line x1="240" y1="110" x2="300" y2="110"/>
+  </g>
+  <g fill="#58a6ff">
+    <circle cx="240" cy="70" r="5"/>
+    <circle cx="240" cy="150" r="5"/>
+    <circle cx="240" cy="110" r="5"/>
+    <circle cx="300" cy="55" r="4" opacity="0.7"/>
+    <circle cx="300" cy="165" r="4" opacity="0.7"/>
+    <circle cx="300" cy="110" r="4" opacity="0.7"/>
+  </g>
+
+  <!-- Title -->
+  <text x="330" y="100" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#f0f3f6">MCP Server Skeleton</text>
+  <text x="332" y="140" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" fill="#8b949e">Pokémon data tools over the Model Context Protocol</text>
+
+  <!-- Tech chips -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#58a6ff">
+    <g>
+      <rect x="332" y="160" width="86" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
+      <text x="375" y="178" text-anchor="middle">mcp 2.2</text>
+    </g>
+    <g>
+      <rect x="428" y="160" width="130" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
+      <text x="493" y="178" text-anchor="middle">Streamable HTTP</text>
+    </g>
+    <g>
+      <rect x="568" y="160" width="104" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
+      <text x="620" y="178" text-anchor="middle">PokéAPI v2</text>
+    </g>
+    <g>
+      <rect x="682" y="160" width="80" height="26" rx="13" fill="#0d1117" stroke="#58a6ff" stroke-width="1"/>
+      <text x="722" y="178" text-anchor="middle">Uvicorn</text>
+    </g>
+  </g>
+</svg>
