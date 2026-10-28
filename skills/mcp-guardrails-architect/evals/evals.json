@@ -47,6 +47,7 @@
         "Proposes a per-tool output DTO built from an explicit allowlist of fields.",
         "Applies masking by data classification: PAN to at most first6/last4, national ID partially masked, tokens/secrets never exposed.",
         "Treats provider free-text fields as untrusted data (truncate, sanitize, mark as data not instructions).",
+        "Caps response volume with pagination, maximum items/fields, and a maximum nesting depth.",
         "Runs DLP over the serialized DTO as a last deterministic barrier and fails closed on detector error."
       ],
       "failure_signals": [
@@ -54,6 +55,7 @@
         "Uses a blocklist (deny known-bad fields) instead of an allowlist.",
         "Returns full card numbers, CVV, or credentials to the LLM.",
         "Treats provider free text as trusted instructions.",
+        "Returns unbounded or arbitrarily nested provider payloads without volume or depth limits.",
         "Suggests DLP that passes the response through on error (fail open)."
       ]
     },

@@ -203,7 +203,7 @@ function run_tool(identity, args, tool):
 
   The examples in this skill use Brazilian fintech data types (CPF/CNPJ, PIX, PAN under PCI DSS, LGPD). Map them to your domain: national ID or tax number (SSN, NIN, CPF), payment account identifier (IBAN, PIX key, card number), and the governing regulation (GDPR, HIPAA, PCI DSS, LGPD). The patterns — allowlist output, mask by classification, validate with checksums, fail closed — are jurisdiction-independent.
 - Treat provider **free text** (descriptions, memos) as **untrusted**: truncate, sanitize, and mark as data rather than instructions to mitigate indirect injection.
-- Limit response volume with pagination and a maximum number of items/fields per response.
+- Limit response volume with pagination and a maximum number of items/fields per response, and cap the **nesting depth** of returned structures (deeply nested payloads amplify serialization and DLP cost even within item/field limits).
 
 **Technologies and approaches**
 
@@ -344,6 +344,7 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
 ### Phases 4–5 — DTO, masking, DLP, and auditing (PII leakage)
 
 - [ ] A new provider field does **not** appear in output until the DTO is explicitly changed.
+- [ ] Oversized responses are paginated and capped (items/fields), and payloads nested beyond the maximum depth are rejected or truncated.
 - [ ] Valid PAN (Luhn) with spaces, hyphens, or periods → masked or blocked; full PAN never leaves the server.
 - [ ] A 16-digit sequence that **fails** Luhn is handled according to policy (without unnecessary false positives).
 - [ ] CPF with or without punctuation, in free text or a description field → redacted/masked; invalid check digits are handled according to policy.
