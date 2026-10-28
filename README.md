@@ -93,6 +93,7 @@ For example, when adding an external integration, `python-backend` helps decide 
 ### Use `mcp-guardrails-architect` when
 
 - Creating, changing, or reviewing MCP tools, resources, or prompts that handle sensitive data.
+- Designing an MCP server's tool surface (one narrow tool per business action, no generic pass-through tools) or payment confirmation flows (prepare/confirm with payload-bound tokens).
 - Designing OAuth 2.1/OIDC, JWT/JWKS, scopes, MFA, or object-level authorization for an MCP Resource Server.
 - Defining strict tool input schemas, output DTOs, masking, DLP, or audit logging.
 - Assessing prompt injection, confused deputy, IDOR/BOLA, SSRF, token passthrough, or data exfiltration risks in an MCP/LLM integration.

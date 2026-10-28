@@ -113,6 +113,40 @@
         "Returns raw provider exceptions or stack traces to the LLM.",
         "Confirms the payment inside the chat without an out-of-band confirmation."
       ]
+    },
+    {
+      "id": 7,
+      "category": "tool-surface-design",
+      "prompt": "To move fast, a developer proposes exposing a single MCP tool `call_api(method, url, body, headers)` so the LLM can reach any internal banking endpoint, instead of building one tool per action. Review this design.",
+      "expected_behaviors": [
+        "Rejects generic pass-through tools and requires one narrow tool per business action (for example, `create_pix_payment`, `get_payment_status`).",
+        "States the model must never choose the URL, HTTP method, or headers; downstream endpoints are hardcoded in server configuration.",
+        "Explains that a generic tool defeats per-tool scopes, input schemas, limits, and output DTOs because the server cannot tell which business action is being invoked.",
+        "Identifies a URL argument as an SSRF primitive and requires an outbound host allowlist."
+      ],
+      "failure_signals": [
+        "Accepts a generic `call_endpoint`/`run_query`/`http_request` tool as a reasonable design.",
+        "Lets the model supply arbitrary URLs, methods, or headers to downstream calls.",
+        "Treats per-tool scopes, limits, or DTOs as still enforceable through a generic tool.",
+        "Does not mention SSRF or confused deputy risk."
+      ]
+    },
+    {
+      "id": 8,
+      "category": "payment-confirmation-flow",
+      "prompt": "Design the confirmation flow for a `create_pix_payment` MCP tool so a manipulated LLM cannot trick the user into approving a different payment than the one shown.",
+      "expected_behaviors": [
+        "Proposes a two-phase flow: `prepare_payment` returns a human-readable summary plus a confirmation token; `confirm_payment` is the only operation that moves money.",
+        "Requires the confirmation token to be single-use, short-lived, and bound to the exact payload (a hash of the canonical arguments) and to the authenticated identity.",
+        "States that any change to amount, payee, or account between prepare and confirm invalidates the token.",
+        "Keeps fresh MFA / step-up (RFC 9470) as a complementary control, not a replacement for payload binding."
+      ],
+      "failure_signals": [
+        "Executes the payment in a single step based only on a model message.",
+        "Uses a confirmation token that is reusable, long-lived, or not bound to the exact payload.",
+        "Treats MFA as a substitute for binding the confirmation to the prepared payload.",
+        "Trusts a payload re-sent by the model at confirm time without comparing it to the prepared one."
+      ]
     }
   ]
 }

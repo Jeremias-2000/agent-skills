@@ -1,6 +1,6 @@
 ---
 name: mcp-guardrails-architect
-description: "Design, implement, review, or audit input and output guardrails for MCP Resource Servers that expose tools handling sensitive data such as payments, card numbers, personal identifiers, or tokens. Framework-agnostic (official MCP SDK, FastMCP, or others). Use for MCP tools, OAuth/JWT/MFA validation, input schemas, output DTOs, DLP, masking, audit logging, prompt injection, confused deputy risks, or questions about preventing sensitive data leaks in MCP/LLM systems."
+description: "Design, implement, review, or audit input and output guardrails for MCP Resource Servers that expose tools handling sensitive data such as payments, card numbers, personal identifiers, or tokens. Framework-agnostic (official MCP SDK, FastMCP, or others). Use for MCP tools, OAuth/JWT/MFA validation, input schemas, output DTOs, DLP, masking, audit logging, prompt injection, confused deputy risks, tool-surface design, payment confirmation flows, or questions about preventing sensitive data leaks in MCP/LLM systems."
 ---
 
 # MCP Guardrails Architect
@@ -18,6 +18,7 @@ Ensure every MCP tool call follows this sequence: authentication and scope autho
 ### 1.2 When to activate
 
 - Creating or changing a tool, resource, or prompt on an MCP server.
+- Designing an MCP server's tool surface (which tools to expose, how granular they are, and whether a generic pass-through tool is acceptable — it is not).
 - Configuring OAuth 2.1, OIDC, JWT, JWKS, or MFA on a Resource Server.
 - Defining tool input schemas or output DTOs.
 - Working with tools that access financial or personal data (card numbers, national/tax identifiers such as CPF/CNPJ or SSN, tokens, balances, or statements).
@@ -45,6 +46,17 @@ IdP (OAuth + MFA) --JWKS--> [1]
 ```
 
 ## 2. Implementation guidance
+
+### Tool surface design (design-time prerequisite)
+
+Before the pipeline stages, constrain what the model can ask the server to do. Every per-tool control below (scopes, schemas, limits, DTOs) assumes the server can tell which business action is being invoked.
+
+**Security requirements**
+
+- **One tool per business action** (for example, `create_pix_payment`, `get_payment_status`). MUST NOT expose generic pass-through tools such as `call_endpoint(url, body)`, `run_query(sql)`, or `http_request(...)`: a generic tool bypasses per-tool scopes, input schemas, limits, and output DTOs, because the server can no longer distinguish which business action a call represents.
+- **Endpoints are server configuration.** The model MUST NOT choose the URL, HTTP method, or headers of downstream calls; hardcode them per tool. A tool that accepts a URL argument is an SSRF primitive (see stage 3, controlled egress).
+- **Keep the surface minimal and narrow.** If two business actions need different scopes, limits, or output fields, they are different tools. Fewer, narrower tools make every later stage actually enforceable.
+- Tool names and descriptions are static, versioned, and reviewed (see stage 2, tool poisoning).
 
 ### Stage 1 — Authentication and scope (before the tool)
 
@@ -155,7 +167,8 @@ function guard_input(raw_args, tool):
 - **Identity comes from the token**: `sub` (mapped internally to a customer/account) is the only source of the user's identity. Arguments must never override it.
 - **Ownership check**: every resource accessed or changed must belong to `sub`; otherwise respond “not found” without confirming that the resource exists.
 - **Least privilege downstream**: use provider credentials with minimum scope; prefer token exchange or per-user credentials over a shared “master” key. Store secrets in a vault (Vault/Secret Manager), never in LLM context or logs.
-- **Write operations (payments)**: apply per-user and per-tool amount limits, require explicit confirmation outside the chat (step-up/fresh MFA, already required in stage 1), and enforce idempotency.
+- **Write operations (payments)**: apply per-user and per-tool amount limits, cumulative velocity limits (for example, a daily total), and payee allowlists where the domain supports them; require explicit confirmation outside the chat (step-up/fresh MFA, already required in stage 1), and enforce idempotency.
+- **Two-phase confirmation for money movement**: split execution into `prepare_<action>` and `confirm_<action>`. `prepare` validates the request and returns a human-readable summary plus a **confirmation token**; `confirm` is the only operation that moves money. The token MUST be single-use, expire quickly (for example, 60–120 seconds), be bound to the exact payload (a hash of the canonical arguments), and be bound to the authenticated identity. Any change to amount, payee, or account between prepare and confirm MUST invalidate the token. This complements step-up MFA rather than replacing it: MFA proves the user is present; the confirmation token proves the user approved *this exact* payload.
 - **Controlled egress**: allowlist outbound hosts; do not accept arbitrary URLs in arguments (prevents SSRF).
 - **Resilience**: use short timeouts, a circuit breaker, and retries only for idempotent operations.
 - **Sanitized errors**: convert provider exceptions to application-defined error codes. Never return stack traces, SQL, internal URLs, or raw payloads to the LLM.
@@ -226,6 +239,7 @@ function to_dto(raw, tool):
 - **Action by severity**: *redact* (replace with a marker such as `[REDACTED:CPF]`) for partial PII; *block* (reject the entire response) for secrets, full PANs, and tokens.
 - **Auditing**: write a structured per-call log with `correlation_id`, `sub` (or a hash), tool, scopes, each stage's decision (allow/deny/redact/block), count and **type** of redacted items, and latency. **Never log sensitive values** or cleartext arguments; log an argument hash only when traceability is needed.
 - Use immutable (append-only) logs, defined retention (per the applicable privacy law), restricted access, and alerts for spikes in blocks/redactions (possible attack or bug).
+- Alert on **business-pattern anomalies in successful calls**, not only on guardrail decisions: bursts of payment calls per user, amounts clustered near the configured limit, repeated failed confirmations, or first-time payees. An attacker holding a valid session may never trip a guardrail, so detection must cover allowed traffic too.
 - **Fail closed**: a DLP error blocks the response; never pass it through.
 
 **Technologies and approaches**
@@ -280,6 +294,12 @@ on any error/timeout: return SAFE_FALLBACK_MESSAGE      # fail closed
 
 Mark an item as passed only when supported by evidence (logs, automated tests, or captures). Run all security tests in CI and whenever schemas, DLP rules, or security dependencies change.
 
+### Phase 0 — Tool surface
+
+- [ ] Every tool maps to one business action; there are no generic pass-through tools (`call_endpoint`, `run_query`, `http_request`, or similar).
+- [ ] No tool accepts a URL, HTTP method, or headers as arguments; downstream endpoints are hardcoded in server configuration.
+- [ ] Each tool has its own required scopes, input schema, limits, and output DTO (a generic tool would make these unenforceable).
+
 ### Phase 1 — Authentication, scope, and MFA
 
 - [ ] Request without a token → 401, with no informative response body.
@@ -318,6 +338,8 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
 - [ ] Provider errors return sanitized codes, with no stack trace or internal URL.
 - [ ] Per-user value/volume limits are enforced.
 - [ ] An arbitrary URL in an argument cannot trigger an outbound request (SSRF).
+- [ ] Payment tools are split into `prepare_*`/`confirm_*`: confirming with an already-used token → rejected; with an expired token → rejected; with a payload that differs from the prepared one → rejected; with a token issued to another user → rejected.
+- [ ] Cumulative velocity limits (for example, daily totals) and payee allowlists are enforced server-side where the domain supports them.
 
 ### Phases 4–5 — DTO, masking, DLP, and auditing (PII leakage)
 
@@ -330,6 +352,7 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
 - [ ] DLP module error → block (fail closed), never passthrough.
 - [ ] Every audit log includes `correlation_id`, `sub`, tool, and per-stage decisions; **no** sensitive values appear in cleartext (automated log scan).
 - [ ] Logs are append-only and alerts for block/redaction spikes are configured.
+- [ ] Alerts also cover anomalies in *successful* calls (payment bursts per user, amounts near limits, repeated failed confirmations, first-time payees).
 
 ### Phase 6 — Final response
 
@@ -392,5 +415,5 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
    - **Summary**: compliant, partially compliant, or non-compliant.
    - **Findings by stage**, each with severity (critical, high, medium, low), evidence, and a recommendation.
    - **Uncovered checklist items** from section 3.
-4. Immediately flag critical deviations: identity taken from arguments, token passthrough, unfixed JWT algorithms, direct serialization of provider objects, fail-open DLP, or a missing stage 6 control.
+4. Immediately flag critical deviations: identity taken from arguments, token passthrough, unfixed JWT algorithms, generic pass-through tools or tools that accept URLs, payment execution without a prepare/confirm step, direct serialization of provider objects, fail-open DLP, or a missing stage 6 control.
 5. Do not write complete code by default. Provide pseudocode, expected behavior, and test guidance; implement code only when the user explicitly requests it.
