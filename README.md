@@ -23,7 +23,7 @@ Each skill is a self-contained package — a `SKILL.md` plus on-demand reference
 |---|---|
 | [`python-backend`](skills/python-backend/) | Python backend architecture, domain-driven design, AWS Lambda, logging, testing, and quality. |
 | [`clean-arch-ddd-guard`](skills/clean-arch-ddd-guard/) | Validates a chosen Clean Architecture + DDD project layout and layer dependencies. |
-| [`mcp-guardrails-architect`](skills/mcp-guardrails-architect/) | Designs and reviews security guardrails for MCP servers handling sensitive data. |
+| [`mcp-guardrails-architect`](skills/mcp-guardrails-architect/) | Designs and reviews security guardrails for MCP servers handling sensitive data, mapped to the OWASP Top 10:2025. |
 | [`mcp-server-skeleton`](skills/mcp-server-skeleton/) | Scaffolds and reviews Python MCP servers over Streamable HTTP with clean architecture layers, structured JSON logging, and MCP Inspector workflows. |
 
 ## Installation
@@ -97,9 +97,10 @@ For example, when adding an external integration, `python-backend` helps decide 
 - Designing OAuth 2.1/OIDC, JWT/JWKS, scopes, MFA, or object-level authorization for an MCP Resource Server.
 - Defining strict tool input schemas, output DTOs, masking, DLP, or audit logging.
 - Assessing prompt injection, confused deputy, IDOR/BOLA, SSRF, token passthrough, or data exfiltration risks in an MCP/LLM integration.
+- Mapping MCP controls to the OWASP Top 10:2025 categories (A01–A10) during an audit or compliance review.
 - Reviewing whether security controls fail closed and what evidence/tests are needed before release.
 
-The skill uses a six-stage pipeline: authentication and scope, input guard, tool execution, output DTO and masking, output DLP and audit, and final response validation. It is guidance and a review checklist, not a ready-made security implementation. In particular, final-response validation must run in a gateway/orchestrator/host that can inspect the LLM's final text; a standalone MCP Resource Server cannot enforce that stage by itself.
+The skill uses a six-stage pipeline: authentication and scope, input guard, tool execution, output DTO and masking, output DLP and audit, and final response validation. On-demand references cover the OWASP Top 10:2025 mapping, supply chain and integrity, cryptography and deployment hardening, and traditional injection and exceptional conditions. It is guidance and a review checklist, not a ready-made security implementation. In particular, final-response validation must run in a gateway/orchestrator/host that can inspect the LLM's final text; a standalone MCP Resource Server cannot enforce that stage by itself.
 
 For a focused review, provide the relevant tool/schema/authentication/output code and ask for findings by pipeline stage, evidence, severity, recommendations, and uncovered acceptance tests. Do not include real credentials or production personal/payment data; use synthetic examples. The skill does not automatically install middleware, validate a deployment, or prove regulatory compliance — treat its recommendations as design and verification guidance, and confirm protocol/library details against the versions used by your project.
 
@@ -139,7 +140,12 @@ skills/
 ├── mcp-guardrails-architect/
 │   ├── SKILL.md                          # MCP security guardrail design and review
 │   ├── evals/evals.json
-│   └── scripts/check_guardrails.py       # static audit for the six-stage controls
+│   ├── scripts/check_guardrails.py       # static audit for the six-stage controls
+│   └── references/
+│       ├── owasp-top10-mapping.md
+│       ├── supply-chain-and-integrity.md
+│       ├── crypto-secrets-and-misconfiguration.md
+│       └── injection-and-exceptional-conditions.md
 └── mcp-server-skeleton/
     ├── SKILL.md                          # MCP server scaffolding and review workflow
     ├── evals/evals.json

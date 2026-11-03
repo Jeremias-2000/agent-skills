@@ -149,6 +149,96 @@
         "Treats MFA as a substitute for binding the confirmation to the prepared payload.",
         "Trusts a payload re-sent by the model at confirm time without comparing it to the prepared one."
       ]
+    },
+    {
+      "id": 9,
+      "category": "supply-chain-integrity",
+      "prompt": "A developer adds a new JWT validation library to the MCP server by appending `pyjwt` (unpinned) to requirements.txt and letting CI install the latest version on every build. Review this from a supply-chain perspective.",
+      "expected_behaviors": [
+        "Requires every dependency pinned (`==`) and a committed lockfile installed with `--locked`/`--require-hashes` in CI and production.",
+        "Requires an SBOM (CycloneDX or SPDX) generated per release and archived.",
+        "Requires a CI vulnerability scan gate (pip-audit, osv-scanner, or equivalent) with documented, expiring exceptions.",
+        "Treats security-critical libraries (JWT, DLP, schema) as part of the security boundary, requiring review of maintainer reputation and transitive footprint.",
+        "Recommends signed artifacts and provenance verification (Sigstore/SLSA) where available, and forbids runtime self-update of code or models."
+      ],
+      "failure_signals": [
+        "Accepts unpinned or latest-version installs as normal practice.",
+        "Has no lockfile or SBOM requirement.",
+        "Suggests updating dependencies automatically at runtime in production.",
+        "Treats dependency choice as purely a convenience decision with no security review."
+      ]
+    },
+    {
+      "id": 10,
+      "category": "cryptography-and-secrets",
+      "prompt": "The MCP server stores per-user provider access tokens in PostgreSQL so tools can call the payment API later, and TLS is terminated at a shared load balancer with plain HTTP from there to the server. What cryptographic controls are required before this ships?",
+      "expected_behaviors": [
+        "Requires TLS 1.2+ on every hop (or an explicitly justified equivalent such as mTLS inside a private mesh); certificate and hostname validation are never disabled.",
+        "Requires encryption at rest for stored tokens using KMS-managed envelope encryption, bound to `sub`, with expiry and revocation.",
+        "Requires secrets and keys in a vault with documented rotation and revocation; none in source control, images, logs, or LLM context.",
+        "Covers backups and replicas with the same encryption rigor as primary storage.",
+        "States that access tokens should not be persisted at all where avoidable."
+      ],
+      "failure_signals": [
+        "Accepts plaintext token storage in the database.",
+        "Accepts `verify=False`, unverified TLS contexts, or plain HTTP on any hop without justification.",
+        "Stores keys in environment files or source control.",
+        "Ignores backups and replicas."
+      ]
+    },
+    {
+      "id": 11,
+      "category": "deployment-misconfiguration",
+      "prompt": "Review this production deployment of the MCP server: FastAPI runs with debug=True, CORSMiddleware uses allow_origins=['*'] with allow_credentials=True, the container runs as root, and the security group allows inbound from 0.0.0.0/0. List the problems and the required fixes.",
+      "expected_behaviors": [
+        "Flags debug=True as a release blocker (stack traces and interactive debugger exposure).",
+        "Flags wildcard CORS combined with credentials; requires an explicit origin allowlist or no CORS for server-to-server traffic.",
+        "Requires a non-root container with a read-only filesystem and dropped capabilities.",
+        "Requires deny-by-default network rules and an egress allowlist.",
+        "Requires startup configuration validation that fails fast on missing or weak configuration."
+      ],
+      "failure_signals": [
+        "Accepts any of the four configurations as fine for production.",
+        "Treats debug mode as a minor issue.",
+        "Does not mention the wildcard-CORS-plus-credentials interaction.",
+        "Has no requirement for fail-fast configuration validation."
+      ]
+    },
+    {
+      "id": 12,
+      "category": "traditional-injection",
+      "prompt": "A tool `search_transactions` builds its query with an f-string: `f\"SELECT * FROM transactions WHERE merchant LIKE '%{merchant}%'\"`. The developer argues it is safe because the stage 2 input guard already validates the `merchant` argument. Review.",
+      "expected_behaviors": [
+        "Rejects string-built SQL unconditionally; requires parameterized queries or the ORM query builder.",
+        "Explains that input validation is defense in depth, never a substitute for parameterization.",
+        "Requires a least-privilege database user (no DDL, no cross-schema access).",
+        "Notes stored/second-order injection: data read back from storage must be sanitized before entering LLM context.",
+        "Notes that database errors must be sanitized because they leak schema internals."
+      ],
+      "failure_signals": [
+        "Accepts f-string SQL because the input is validated.",
+        "Suggests escaping or regex sanitization as the primary fix instead of parameterization.",
+        "Does not mention parameterized queries.",
+        "Treats data read back from the database as trusted."
+      ]
+    },
+    {
+      "id": 13,
+      "category": "exceptional-conditions",
+      "prompt": "During `confirm_payment`, the provider charges the user but the MCP server crashes before writing its record. The client retries and the user is charged twice. Analyze the failure and design the fix.",
+      "expected_behaviors": [
+        "Identifies the missing atomicity/compensation: reconcile with the provider by `idempotency_key` before any retry.",
+        "Requires idempotency enforced as a database unique constraint, with the ownership check and mutation atomic (no TOCTOU).",
+        "Requires bounded, idempotent-only retries with exponential backoff; no retry on 4xx or validation failures.",
+        "Requires fail-closed handling of unknown charge status: deny plus a safe message with a correlation_id.",
+        "Requires an exception boundary that maps uncaught errors to sanitized application codes."
+      ],
+      "failure_signals": [
+        "Suggests unlimited or blind retries.",
+        "Treats the crash as impossible or ignores partial failure.",
+        "Has no reconciliation by idempotency key.",
+        "Lets the raw exception reach the client."
+      ]
     }
   ]
 }
