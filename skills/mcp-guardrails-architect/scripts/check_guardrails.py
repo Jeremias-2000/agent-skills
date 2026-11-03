@@ -23,12 +23,16 @@ Anti-patterns flagged as errors:
   - Algorithm read from the token header / `alg: none` accepted
   - `verify=False` / disabled JWT verification
   - Logging sensitive-looking fields in cleartext
+  - Debug mode enabled, wildcard CORS, or TLS verification disabled
+    (deployment misconfiguration / cryptographic failures, OWASP A02/A04)
 
 Anti-patterns flagged as warnings:
   - Identity taken from tool arguments (user_id/account_id/cpf as parameters)
   - Direct `return` of a provider/SDK response object from a tool
   - Write-named tools with no idempotency handling
   - prepare_* tools without a matching confirm_* tool, or payment tools with no prepare/confirm pair
+  - SQL built with string formatting inside .execute() calls (OWASP A05)
+  - Unpinned requirements (no '==') in requirements*.txt (OWASP A03)
 
 Exit codes: 0 no errors, 1 with errors (or warnings with --strict), 2 invalid usage.
 """
@@ -80,6 +84,11 @@ SENSITIVE_LOG_RE = re.compile(
     r"(log|logger|logging)\.\w+\([^)]*\b(password|secret|token|cvv|pan|card_number|api_key)\b",
     re.IGNORECASE,
 )
+DEBUG_ENABLED_RE = re.compile(r"\bdebug[\"']?\s*[=:]\s*True\b", re.IGNORECASE)
+CORS_WILDCARD_RE = re.compile(r"allow_origins\s*=\s*\[[^\]]*['\"]\*['\"]", re.IGNORECASE)
+TLS_UNVERIFIED_RE = re.compile(r"ssl\._create_unverified_context|check_hostname\s*=\s*False|CERT_NONE", re.IGNORECASE)
+EXECUTE_RE = re.compile(r"\.execute\w*\(", re.IGNORECASE)
+SQL_FORMAT_RE = re.compile(r"f['\"]|\.format\(|['\"]\s*%")
 GENERIC_TOOL_NAME_RE = re.compile(
     r"^(call_endpoint|call_api|http_request|run_query|execute_query|proxy_request|forward_request|raw_request|send_request)$",
     re.IGNORECASE,
@@ -141,7 +150,7 @@ def returns_name_directly(node: ast.FunctionDef) -> bool:
 
 def scan_file(path: Path, root: Path, rep: Report) -> None:
     try:
-        src = path.read_text(encoding="utf-8", errors="replace")
+        src = path.read_text(encoding="utf-8-sig", errors="replace")
     except OSError:
         return
     rel = str(path.relative_to(root))
@@ -192,6 +201,37 @@ def scan_file(path: Path, root: Path, rep: Report) -> None:
                 "SENSITIVE_LOG", rel,
                 "A sensitive-looking field may be logged in cleartext.",
                 "Never log secrets, tokens, PAN, or passwords; log a hash only when traceability is required.",
+                i,
+            )
+
+    # Anti-pattern: deployment misconfiguration and traditional injection
+    for i, line in enumerate(lines, 1):
+        if DEBUG_ENABLED_RE.search(line):
+            rep.error(
+                "DEBUG_ENABLED", rel,
+                "Debug mode appears to be enabled.",
+                "Debug mode is a release blocker: it exposes stack traces and interactive debuggers (OWASP A02).",
+                i,
+            )
+        if CORS_WILDCARD_RE.search(line):
+            rep.error(
+                "CORS_WILDCARD", rel,
+                "CORS appears to allow any origin ('*').",
+                "Use an explicit origin allowlist; never combine '*' with credentials (OWASP A02).",
+                i,
+            )
+        if TLS_UNVERIFIED_RE.search(line):
+            rep.error(
+                "TLS_UNVERIFIED", rel,
+                "TLS certificate/hostname verification appears to be disabled.",
+                "Never disable TLS verification outside a throwaway local test (OWASP A04).",
+                i,
+            )
+        if EXECUTE_RE.search(line) and SQL_FORMAT_RE.search(line):
+            rep.warn(
+                "SQL_FORMAT", rel,
+                "SQL appears to be built with string formatting in an execute() call.",
+                "Use parameterized queries or the ORM query builder; input validation is not a substitute (OWASP A05).",
                 i,
             )
 
@@ -273,12 +313,38 @@ def evaluate_tool_pairs(rep: Report) -> None:
         )
 
 
+def check_dependency_pinning(root: Path, rep: Report) -> None:
+    """Warn on unpinned entries in requirements*.txt (supply chain, OWASP A03)."""
+    for req in sorted(root.glob("requirements*.txt")):
+        try:
+            req_lines = req.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        except OSError:
+            continue
+        unpinned = [
+            raw.strip()
+            for raw in req_lines
+            if raw.strip()
+            and not raw.strip().startswith(("#", "-", "git+", "http"))
+            and "==" not in raw
+        ]
+        if unpinned:
+            rep.warn(
+                "UNPINNED_DEPS", str(req.relative_to(root)),
+                f"{len(unpinned)} requirement(s) not pinned with '==' (for example `{unpinned[0]}`).",
+                "Pin every dependency and commit a lockfile; install with --locked/--require-hashes in CI and production.",
+            )
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Audit an MCP server for guardrail controls.")
     ap.add_argument("root", help="Project root (directory containing the MCP server source).")
     ap.add_argument("--json", action="store_true", help="Emit structured JSON output.")
     ap.add_argument("--strict", action="store_true", help="Treat warnings as errors (exit 1).")
     args = ap.parse_args(argv)
+
+    # Scanned content can contain arbitrary characters; keep output cp1252-safe.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
 
     root = Path(args.root).resolve()
     if not root.is_dir():
@@ -295,6 +361,7 @@ def main(argv=None) -> int:
         scan_file(f, root, rep)
     evaluate_stages(rep)
     evaluate_tool_pairs(rep)
+    check_dependency_pinning(root, rep)
 
     # Stage 6 is always out of scope for the server itself.
     rep.warn(

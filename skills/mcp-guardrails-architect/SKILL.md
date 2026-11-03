@@ -1,6 +1,6 @@
 ---
 name: mcp-guardrails-architect
-description: "Design, implement, review, or audit input and output guardrails for MCP Resource Servers that expose tools handling sensitive data such as payments, card numbers, personal identifiers, or tokens. Framework-agnostic (official MCP SDK, FastMCP, or others). Use for MCP tools, OAuth/JWT/MFA validation, input schemas, output DTOs, DLP, masking, audit logging, prompt injection, confused deputy risks, tool-surface design, payment confirmation flows, or questions about preventing sensitive data leaks in MCP/LLM systems."
+description: "Design, implement, review, or audit input and output guardrails for MCP Resource Servers that expose tools handling sensitive data such as payments, card numbers, personal identifiers, or tokens. Framework-agnostic (official MCP SDK, FastMCP, or others). Use for MCP tools, OAuth/JWT/MFA validation, input schemas, output DTOs, DLP, masking, audit logging, prompt injection, confused deputy risks, tool-surface design, payment confirmation flows, OWASP Top 10:2025 mapping for MCP servers, or questions about preventing sensitive data leaks in MCP/LLM systems."
 ---
 
 # MCP Guardrails Architect
@@ -8,6 +8,8 @@ description: "Design, implement, review, or audit input and output guardrails fo
 Guidance for designing and auditing a six-stage guardrail pipeline for an **MCP Resource Server**: **before the tool** (stages 1–2), **tool execution** (stage 3), and **after the tool** (stages 4–6). The guidance is framework-agnostic — it applies to servers built on the official MCP SDK, FastMCP, or any other framework that can inspect requests and responses.
 
 This skill provides requirements, patterns, pseudocode, and checklists; it does not provide a complete implementation. Produce architecture decisions and verifiable acceptance criteria, and leave implementation to the project team unless the user explicitly asks for code.
+
+To scaffold a new server, use the sibling `mcp-server-skeleton` skill for project structure, transport, and logging; apply this skill's guardrail pipeline on top of that skeleton.
 
 ## 1. Skill definition
 
@@ -23,6 +25,7 @@ Ensure every MCP tool call follows this sequence: authentication and scope autho
 - Defining tool input schemas or output DTOs.
 - Working with tools that access financial or personal data (card numbers, national/tax identifiers such as CPF/CNPJ or SSN, tokens, balances, or statements).
 - Reviewing, threat-modeling, or auditing an MCP server.
+- Mapping MCP controls to the OWASP Top 10:2025 categories during an audit or compliance review.
 - Asking about direct or indirect prompt injection, data leakage, confused deputy risks, or LLM-mediated exfiltration.
 
 ### 1.3 Mental model
@@ -44,6 +47,15 @@ MCP client + LLM --Bearer--> [1 Authn/Scope] -> [2 Input Guard] -> [3 Tool Execu
                   AFTER TOOL
 IdP (OAuth + MFA) --JWKS--> [1]
 ```
+
+### 1.5 OWASP Top 10:2025 coverage
+
+The pipeline directly covers A01 (broken access control), A05 (LLM injection), A06 (insecure design), A07 (authentication failures), and A09 (logging/alerting failures). The remaining categories are covered by on-demand references — load them when the task touches that category:
+
+- [references/owasp-top10-mapping.md](references/owasp-top10-mapping.md) — category-by-category mapping with evidence and audit procedure.
+- [references/supply-chain-and-integrity.md](references/supply-chain-and-integrity.md) — A03/A08: pinned dependencies, SBOM, CI gates, signed artifacts, webhook authenticity.
+- [references/crypto-secrets-and-misconfiguration.md](references/crypto-secrets-and-misconfiguration.md) — A04/A02: TLS, encryption at rest, key management, secrets, deployment hardening.
+- [references/injection-and-exceptional-conditions.md](references/injection-and-exceptional-conditions.md) — A05 (traditional injection) and A10: parameterized queries, rollback, partial failure, races, bounded retries.
 
 ## 2. Implementation guidance
 
@@ -129,6 +141,7 @@ Validate required claims and their types before using them. Treat token timestam
 - Measure false positives and false negatives on representative, privacy-safe data before using classifier scores to block requests; document thresholds, exception handling, and user-visible recovery.
 - **Idempotency**: write tools require an `idempotency_key` to prevent duplicate operations during LLM retries.
 - Tool descriptions are static and versioned; never build descriptions dynamically from external data (prevents *tool poisoning*).
+- **Traditional injection** (SQL, OS command, template) inside tool implementations follows its own controls — see [references/injection-and-exceptional-conditions.md](references/injection-and-exceptional-conditions.md); input validation alone is never sufficient for SQL.
 
 **Technologies and approaches**
 
@@ -172,6 +185,7 @@ function guard_input(raw_args, tool):
 - **Controlled egress**: allowlist outbound hosts; do not accept arbitrary URLs in arguments (prevents SSRF).
 - **Resilience**: use short timeouts, a circuit breaker, and retries only for idempotent operations.
 - **Sanitized errors**: convert provider exceptions to application-defined error codes. Never return stack traces, SQL, internal URLs, or raw payloads to the LLM.
+- **Exceptional conditions**: multi-step writes are atomic or compensated, retries are bounded and idempotent-only, and ambiguous states fail closed — see [references/injection-and-exceptional-conditions.md](references/injection-and-exceptional-conditions.md).
 
 **Pseudocode**
 
@@ -203,7 +217,7 @@ function run_tool(identity, args, tool):
 
   The examples in this skill use Brazilian fintech data types (CPF/CNPJ, PIX, PAN under PCI DSS, LGPD). Map them to your domain: national ID or tax number (SSN, NIN, CPF), payment account identifier (IBAN, PIX key, card number), and the governing regulation (GDPR, HIPAA, PCI DSS, LGPD). The patterns — allowlist output, mask by classification, validate with checksums, fail closed — are jurisdiction-independent.
 - Treat provider **free text** (descriptions, memos) as **untrusted**: truncate, sanitize, and mark as data rather than instructions to mitigate indirect injection.
-- Limit response volume with pagination and a maximum number of items/fields per response.
+- Limit response volume with pagination and a maximum number of items/fields per response, and cap the **nesting depth** of returned structures (deeply nested payloads amplify serialization and DLP cost even within item/field limits).
 
 **Technologies and approaches**
 
@@ -344,6 +358,7 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
 ### Phases 4–5 — DTO, masking, DLP, and auditing (PII leakage)
 
 - [ ] A new provider field does **not** appear in output until the DTO is explicitly changed.
+- [ ] Oversized responses are paginated and capped (items/fields), and payloads nested beyond the maximum depth are rejected or truncated.
 - [ ] Valid PAN (Luhn) with spaces, hyphens, or periods → masked or blocked; full PAN never leaves the server.
 - [ ] A 16-digit sequence that **fails** Luhn is handled according to policy (without unnecessary false positives).
 - [ ] CPF with or without punctuation, in free text or a description field → redacted/masked; invalid check digits are handled according to policy.
@@ -404,7 +419,7 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
 
 - Review access and scopes (least privilege) quarterly.
 - Review the threat model for every new tool or integration.
-- Update security dependencies (JWT, DLP, schema) and scan for vulnerabilities in CI.
+- **Supply chain and integrity**: pin dependencies, commit a lockfile, generate an SBOM, gate CI on vulnerability scans, and verify artifact provenance — see [references/supply-chain-and-integrity.md](references/supply-chain-and-integrity.md).
 - Exercise incident response (PII leak, compromised key) using tested runbooks.
 
 ## 5. How to use this skill
@@ -415,5 +430,6 @@ Mark an item as passed only when supported by evidence (logs, automated tests, o
    - **Summary**: compliant, partially compliant, or non-compliant.
    - **Findings by stage**, each with severity (critical, high, medium, low), evidence, and a recommendation.
    - **Uncovered checklist items** from section 3.
+   - For audits, an **OWASP Top 10:2025 mapping** per category (covered / platform responsibility / gap) using [references/owasp-top10-mapping.md](references/owasp-top10-mapping.md).
 4. Immediately flag critical deviations: identity taken from arguments, token passthrough, unfixed JWT algorithms, generic pass-through tools or tools that accept URLs, payment execution without a prepare/confirm step, direct serialization of provider objects, fail-open DLP, or a missing stage 6 control.
 5. Do not write complete code by default. Provide pseudocode, expected behavior, and test guidance; implement code only when the user explicitly requests it.
